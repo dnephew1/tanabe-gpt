@@ -23,14 +23,14 @@ client.on('message', async message => {
       try {
         const chat = await message.getChat();
         const messages = await chat.fetchMessages({limit: 50});
-        const messageTexts = messages.map(message => `${message.from}: ${message.body}`).join(' ');
+        const messageTexts = messages.map(message => `${message.getContact().name}: ${message.body}`).join(' ');
         const prompt = `Faça um resumo das ùltimas 50 messages dessa conversa do grupo: ${messageTexts}`;
         runCompletion(prompt).then(result => message.reply(result));
         async function runCompletion (message) {
           const completion = await openai.createCompletion({
             model: "text-davinci-003",
             prompt: prompt,
-            max_tokens: 200,
+            max_tokens: 1000,
           });
           return completion.data.choices[0].text;      
         }  
@@ -50,7 +50,7 @@ async function runCompletion (message) {
     const completion = await openai.createCompletion({
         model: "text-davinci-003",
         prompt: message,
-        max_tokens: 200,
+        max_tokens: 1000,
     });
     return completion.data.choices[0].text;
 }
