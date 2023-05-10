@@ -6,6 +6,14 @@ const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
 
+//VPS settings
+const puppeteerOptions = {
+  puppeteer: {
+      args: ['--no-sandbox', 
+      '--disable-setuid-sandbox']
+  }
+};
+
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
 
@@ -18,6 +26,7 @@ if(fs.existsSync(SESSION_FILE_PATH)) {
 // Use the saved values
 const client = new Client({
     session: sessionData,
+    puppeteerOptions,
     authStrategy: new LocalAuth(),
 });
 
