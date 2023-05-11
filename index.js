@@ -6,16 +6,6 @@ const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
 
-//VPS settings
-// Set up puppeteer options for the VPS environment
-const puppeteer = require('puppeteer');
-const puppeteerOptions = {
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    headless: true,
-};
-
-client.initialize().catch(_ => _)
-
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
 
@@ -32,11 +22,6 @@ const client = new Client({
       args: ['--no-sandbox'],},
     authStrategy: new LocalAuth(),
 });
-const page = await browser.newPage();
-
-await page.goto('https://www.google.com/', {waitUntil: 'networkidle2'});
-
-browser.close();
 
 // Create a new OpenAI API client
 const configuration = new Configuration({
