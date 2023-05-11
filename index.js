@@ -13,6 +13,10 @@ const puppeteerOptions = {
       '--disable-setuid-sandbox']
   }
 };
+const browser = await puppeteer.launch();
+const page = await browser.newPage();
+
+await browser.close();
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
