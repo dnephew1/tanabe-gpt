@@ -7,16 +7,12 @@ const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
 
 //VPS settings
+// Set up puppeteer options for the VPS environment
+const puppeteer = require('puppeteer');
 const puppeteerOptions = {
-  puppeteer: {
-      args: ['--no-sandbox', 
-      '--disable-setuid-sandbox']
-  }
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true,
 };
-const browser = await puppeteer.launch();
-const page = await browser.newPage();
-
-await browser.close();
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
