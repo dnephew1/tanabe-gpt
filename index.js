@@ -12,6 +12,7 @@ const puppeteer = require('puppeteer');
 const puppeteerOptions = {
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
     headless: true,
+    timeout: 0,
 };
 
 // Path where the session data will be stored
