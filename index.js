@@ -66,6 +66,8 @@ client.on('message', async message => {
   console.log('MESSAGE:',message.body);
   const input = message.body.split(' ');
   if (message.hasQuotedMsg && message.body.includes('Resumo pf')) {
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
     const quotedMessage = await message.getQuotedMessage();
     const quotedText = quotedMessage.body;
     console.log('QUOTE:',quotedMessage.body);
@@ -90,6 +92,7 @@ client.on('message', async message => {
   if (input[0] === 'Resumo' && input[1] === 'pf') {
     if (!input[2]) {
       const chat = await message.getChat();
+      await chat.sendStateTyping();
       const messages = await chat.fetchMessages({ limit: 500 });
       const lastMessage = messages[messages.length - 2];
       const lastMessageTimestamp = lastMessage.timestamp;
@@ -118,16 +121,19 @@ client.on('message', async message => {
           n: 1,
         });
         return completion.data.choices[0].text; 
-        console.log('REPLY:',result)     
+        console.log('REPLY:',result)
       }  
     } else if (input.length >= 2 && input.length <= 501) {
       //////////Summarize X messages/////////////////
       const limit = parseInt(input[2]);
       if (isNaN(limit)) {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
         message.reply('Por favor, forneça um número válido após "Resumo pf" para definir o limite de mensagens.');
         return;
       }
       const chat = await message.getChat();
+      await chat.sendStateTyping();
       const messages = await chat.fetchMessages({ limit: limit });
       const messageswithoutme = messages.filter(message => (
         message.fromMe === false
@@ -150,16 +156,21 @@ client.on('message', async message => {
           n: 1,
         });
         return completion.data.choices[0].text; 
-        console.log('REPLY:',result)          
+        console.log('REPLY:',result)
       }
     } else {
+      const chat = await message.getChat();
+      await chat.sendStateTyping();
       message.reply('Comando inválido. Digite "Resumo pf" para obter um resumo das últimas 100 mensagens ou "Resumo pf [10-500]" para obter um resumo das últimas X mensagens.');
+      client.setPresence(false);
     }
   }
   ////////////////Respond to #////////////////
   if(message.body.startsWith("#")) {
-      runCompletion(message.body.substring(1)).then(result => message.reply(result));
-      console.log('REQUEST:',message.body)     
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+    runCompletion(message.body.substring(1)).then(result => message.reply(result));
+    console.log('REQUEST:',message.body)     
   }
   async function runCompletion (message) {
     const completion = await openai.createCompletion({
