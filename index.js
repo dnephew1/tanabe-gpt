@@ -225,6 +225,44 @@ client.on('message', async message => {
       console.error('An error occurred:', error);
     }
   }
+  if (input[0] === 'Ayub' && input[1] === 'news') {
+    const keywords = input.slice(2).join(' ');
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+    let currentState = '';
+    let selectedTitle = '';
+
+    const query = `site:news.google.com ${keywords}`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR`;
+  
+    try {
+      const browser = await puppeteer.launch();
+      const page = await browser.newPage();
+      await page.goto(searchUrl);
+      await page.waitForSelector('.g');
+      const newsElements = await page.$$('.g');
+  
+      let newsTitles = [];
+      for (let i = 0; i < 5 && i < newsElements.length; i++) {
+        const titleElement = await newsElements[i].$('h3');
+        const title = await (await titleElement.getProperty('textContent')).jsonValue();
+        const numberedTitle = `${i + 1}. ${title}`; // Add the number to the title
+        newsTitles.push(numberedTitle);
+      }
+  
+      await browser.close();
+  
+      if (newsTitles.length > 0) {
+        const reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}":\n\n${newsTitles.join('\n\n')}`;
+        message.reply(reply);
+      } else {
+        message.reply(`Nenhum artigo encontrado para "${keywords}".`);
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+      message.reply('Erro enquanto buscando por artigos.');
+    }
+  }
 });
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
