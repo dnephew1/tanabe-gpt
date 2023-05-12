@@ -91,18 +91,23 @@ client.on('message', async message => {
     if (!input[2]) {
       const chat = await message.getChat();
       const messages = await chat.fetchMessages({ limit: 500 });
-      const lastMessageTimestamp = messages[messages.length - 1].timestamp;
+      const lastMessage = messages[messages.length - 2];
+      const lastMessageTimestamp = lastMessage.timestamp;
+      const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
       const messagesSinceLastHour = messages.filter(message => (
-        message.timestamp > (lastMessageTimestamp - 3600000) &&
+        message.timestamp > oneHourBeforeLastMessageTimestamp &&
         message.fromMe === false
       ));
+      console.log('MESSAGES:', messagesSinceLastHour);
       const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
         const contact = await message.getContact();
         const name = contact.name || 'Unknown';
         return `>>${name}: ${message.body}`;
       }))).join(' ');
+      
+      
       console.log('MESSAGES:',messageTexts)
-      const prompt2 = `Faça um resumo das últimas mensagens dessa conversa do grupo: ${messageTexts}`;
+      const prompt2 = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora: ${messageTexts}`;
       console.log('PROMPT:',prompt2);
       runCompletion(prompt2).then(result => message.reply(result));
       async function summarizeText(prompt2) {
