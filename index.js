@@ -229,14 +229,12 @@ client.on('message', async message => {
     const keywords = input.slice(2).join(' ');
     const chat = await message.getChat();
     await chat.sendStateTyping();
-    let currentState = '';
-    let selectedTitle = '';
-
+  
     const query = `site:news.google.com ${keywords}`;
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR`;
   
     try {
-      const browser = await puppeteer.launch();
+      const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
       const page = await browser.newPage();
       await page.goto(searchUrl);
       await page.waitForSelector('.g');
@@ -260,7 +258,7 @@ client.on('message', async message => {
       }
     } catch (error) {
       console.error('An error occurred:', error);
-      message.reply('Erro enquanto buscando por artigos.');
+      message.reply('Erro ao buscar por artigos.');
     }
   }
 });
