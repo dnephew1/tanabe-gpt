@@ -78,6 +78,7 @@ let page;
 client.on('message', async message => {
   console.log('MESSAGE:',message.body);
   const input = message.body.split(' ');
+  const inputLower = input.map(item => item.toLowerCase());
   const expectedHash = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
   const ayubnews = '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994';
 
@@ -150,7 +151,7 @@ client.on('message', async message => {
     }  
     //////////Summarize X messages/////////////////
     const limit = parseInt(input[2]);
-    } else if (input[0] === 'Resumo' && input[1] === 'pf') { 
+    } else if (inputLower[0] === 'resumo' && inputLower[1] === 'pf') { 
       const limit = parseInt(input[2]);
       if (isNaN(limit)) {
         const chat = await message.getChat();
@@ -196,43 +197,49 @@ client.on('message', async message => {
       try {
         // Scrape news
         const news = await scrapeNews();
-        console.log(news)
+        console.log(news);
         // Translate news to Portuguese using translate-google
         const translatedNews = await translateToPortuguese(news);
+  
+        // Prepare reply
+        let reply = 'Aqui estão as notícias mais relevantes de hoje:\n\n';
+        translatedNews.forEach((newsItem, index) => {
+          reply += `${index + 1}. ${newsItem}\n\n`;
+        });
+  
         // Reply to the message
-        const reply = `Aqui estão as notícias mais relevantes de hoje:\n\n${translatedNews.join('\n\n')}`;
         message.reply(reply);
       } catch (error) {
         console.error('An error occurred:', error);
       }
     }
   }
-  if (input[0] === 'Ayub' && input[1] === 'news' && input[2] === 'fut') {
+  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
     const chat = await message.getChat();
     await chat.sendStateTyping();
     try {
       // Scrape news
       const news = await scrapeNews2();
-
+  
       // Prepare reply
       let reply = 'Aqui estão as notícias sobre futebol mais relevantes de hoje:\n\n';
       news.forEach((newsItem, index) => {
-        reply += `${newsItem.title}\n\n`;
+        reply += `${index + 1}. ${newsItem.title}\n\n`;
       });
-
+  
       // Reply to the message
       message.reply(reply);
     } catch (error) {
       console.error('An error occurred:', error);
     }
   }
-  if (input[0] === 'Ayub' && input[1] === 'news') {
+  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news') {
     const keywords = input.slice(2).join(' ');
     const chat = await message.getChat();
     await chat.sendStateTyping();
   
     const query = `site:news.google.com ${keywords}`;
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR&tbs=lr:lang_1pt,qdr:w`;
   
     try {
       const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
