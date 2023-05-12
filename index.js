@@ -5,6 +5,8 @@ const fs = require('fs');
 const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
+const crypto = require('crypto');
+const path = require('path');
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -65,32 +67,45 @@ client.on('disconnected', (reason) => {
 client.on('message', async message => {
   console.log('MESSAGE:',message.body);
   const input = message.body.split(' ');
-  if (message.hasQuotedMsg && message.body.includes('Resumo pf')) {
-    const chat = await message.getChat();
-    await chat.sendStateTyping();
-    const quotedMessage = await message.getQuotedMessage();
-    const quotedText = quotedMessage.body;
-    console.log('QUOTE:',quotedMessage.body);
-    const prompt1 = `Faça um resumo desse texto: ${quotedText}`;
-    console.log('PROMPT:',prompt1);
-    runCompletion(prompt1).then(result => {
-      message.reply(result);
-      console.log('REPLY:', result);
-    });
-    async function summarizeText(prompt1) {
-      const response = await openai.completions.create({
-        engine: 'text-davinci-003',
-        prompt: prompt1,
-        max_tokens: 1000,
-        n: 1,
+  const expectedHash = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
+
+  if (message.hasQuotedMsg && message.hasMedia && message.type === 'sticker') {
+    const stickerData = await message.downloadMedia();
+    // Calculate the SHA-256 hash of the sticker image
+    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    if (hash === expectedHash) {
+      const chat = await message.getChat();
+      await chat.sendStateTyping();
+      const quotedMessage = await message.getQuotedMessage();
+      const quotedText = quotedMessage.body;
+      console.log('QUOTE:',quotedMessage.body);
+      const prompt1 = `Faça um resumo desse texto: ${quotedText}`;
+      console.log('PROMPT:',prompt1);
+      runCompletion(prompt1).then(result => {
+        message.reply(result);
+        console.log('REPLY:', result);
       });
-      return completion.data.choices[0].text;      
-    }
+      async function summarizeText(prompt1) {
+        const response = await openai.completions.create({
+          engine: 'text-davinci-003',
+          prompt: prompt1,
+          max_tokens: 1000,
+          n: 1,
+        });
+        return completion.data.choices[0].text;      
+      }
     return;
+    }
   }  
   //////Summarize 1hr////////////////
-  if (input[0] === 'Resumo' && input[1] === 'pf') {
-    if (!input[2]) {
+  
+    if (message.hasMedia && message.type === 'sticker') {
+      const stickerData = await message.downloadMedia();
+  
+      // Calculate the SHA-256 hash of the sticker image
+      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+  
+      if (hash === expectedHash) {
       const chat = await message.getChat();
       await chat.sendStateTyping();
       const messages = await chat.fetchMessages({ limit: 500 });
@@ -122,9 +137,10 @@ client.on('message', async message => {
         });
         return completion.data.choices[0].text; 
         console.log('REPLY:',result)
-      }  
-    } else if (input.length >= 2 && input.length <= 501) {
-      //////////Summarize X messages/////////////////
+      }
+    }  
+    //////////Summarize X messages/////////////////
+    if (input[0] === 'Resumo' && input[1] === 'pf' && input[2].length >= 2 && input[2].length <= 501) { 
       const limit = parseInt(input[2]);
       if (isNaN(limit)) {
         const chat = await message.getChat();
@@ -158,11 +174,6 @@ client.on('message', async message => {
         return completion.data.choices[0].text; 
         console.log('REPLY:',result)
       }
-    } else {
-      const chat = await message.getChat();
-      await chat.sendStateTyping();
-      message.reply('Comando inválido. Digite "Resumo pf" para obter um resumo das últimas 100 mensagens ou "Resumo pf [10-500]" para obter um resumo das últimas X mensagens.');
-      client.setPresence(false);
     }
   }
   ////////////////Respond to #////////////////
@@ -182,4 +193,3 @@ client.on('message', async message => {
     console.log('REPLY:',result)          
   }
 });
-
