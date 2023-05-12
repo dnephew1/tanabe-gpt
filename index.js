@@ -27,6 +27,7 @@ if(fs.existsSync(SESSION_FILE_PATH)) {
 const client = new Client({
     session: sessionData,
     puppeteer: {
+      headless: true,
       args: ['--no-sandbox'],},
     authStrategy: new LocalAuth(),
 });
