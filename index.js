@@ -134,7 +134,8 @@ client.on('message', async message => {
       const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
       const messagesSinceLastHour = messages.filter(message => (
         message.timestamp > oneHourBeforeLastMessageTimestamp &&
-        message.fromMe === false
+        message.fromMe === false &&
+        index !== messages.length - 1
       ));
       console.log('MESSAGES:', messagesSinceLastHour);
       const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
@@ -164,7 +165,8 @@ client.on('message', async message => {
         await chat.sendStateTyping();
         const messages = await chat.fetchMessages({ limit: limit });
         const messageswithoutme = messages.filter(message => (
-          message.fromMe === false
+          message.fromMe === false &&
+          index !== messages.length - 1
         ));
         const messageTexts = (await Promise.all(messageswithoutme.map(async message => {
           const contact = await message.getContact();
