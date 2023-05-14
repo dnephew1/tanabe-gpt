@@ -5,8 +5,15 @@ const fs = require('fs');
 const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
 require('dotenv').config();
-
+const puppeteer = require('puppeteer');
 const crypto = require('crypto');
+const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const translate = require('translate-google');
+
+
+
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
 
@@ -20,6 +27,7 @@ if(fs.existsSync(SESSION_FILE_PATH)) {
 const client = new Client({
     session: sessionData,
     puppeteer: {
+      headless: true,
       args: ['--no-sandbox'],},
     authStrategy: new LocalAuth(),
 });
@@ -62,123 +70,281 @@ client.on('disconnected', (reason) => {
   console.log('Client disconnected: ' + reason);
   reconnectClient();
 });
+
+// Declare the page variable outside of the event listener
+let page;
+
 ///////////////////Script/////////////////////////
 client.on('message', async message => {
   console.log('MESSAGE:',message.body);
   const input = message.body.split(' ');
-  
-  // Replace 'path/to/sticker.webp' with the actual path to your sticker image file
-  const stickerPath = 'path/to/sticker.webp';
+  const inputLower = input.map(item => item.toLowerCase());
+  const expectedHash = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
+  const ayubnews = '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994';
 
-  // Load the sticker image file
-  const stickerData = fs.readFileSync(stickerPath);
+  if (message.hasMedia && message.type === 'sticker') {
+    const stickerData = await message.downloadMedia();
 
-  // Compute the SHA-256 hash of the sticker image data
-  const hash = crypto.createHash('sha256').update(stickerData).digest('hex');
+    // Save the sticker image file
+    const saveDirectory = __dirname + '/stickers'; // Replace with the desired save directory
+    const stickerFileName = `${message.id}.webp`; // Use a unique name for each sticker
+    const savePath = `${saveDirectory}/${stickerFileName}`;
 
-  // Print the hash
-  console.log('SHA-256 hash:', hash);
-  
-  if (message.hasQuotedMsg && message.body.includes('Resumo pf')) {
-    const quotedMessage = await message.getQuotedMessage();
-    const quotedText = quotedMessage.body;
-    console.log('QUOTE:',quotedMessage.body);
-    const prompt1 = `Faça um resumo desse texto: ${quotedText}`;
-    console.log('PROMPT:',prompt1);
-    runCompletion(prompt1).then(result => {
-      message.reply(result);
-      console.log('REPLY:', result);
-    });
-    async function summarizeText(prompt1) {
-      const response = await openai.completions.create({
-        engine: 'text-davinci-003',
-        prompt: prompt1,
-        max_tokens: 1000,
-        n: 1,
+    fs.writeFileSync(savePath, stickerData.data);
+
+    console.log(`Sticker saved to: ${savePath}`);
+
+    // Calculate the SHA-256 hash of the saved sticker image
+    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    console.log('SHA-256 hash:', hash);
+  }
+
+  if (message.hasQuotedMsg && message.hasMedia && message.type === 'sticker') {
+    const stickerData = await message.downloadMedia();
+    // Calculate the SHA-256 hash of the sticker image
+    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    if (hash === expectedHash) {
+      const chat = await message.getChat();
+      await chat.sendStateTyping();
+      const quotedMessage = await message.getQuotedMessage();
+      const quotedText = quotedMessage.body;
+      console.log('QUOTE:',quotedMessage.body);
+      const prompt = `Faça um resumo desse texto: ${quotedText}`;
+      console.log('PROMPT:',prompt);
+      runCompletion(prompt).then(result => {
+        message.reply(result);
+        console.log('REPLY:', result);
       });
-      return completion.data.choices[0].text;      
-    }
     return;
+    }
   }  
   //////Summarize 1hr////////////////
-  if (input[0] === 'Resumo' && input[1] === 'pf') {
-    if (!input[2]) {
+    if (message.hasMedia && message.type === 'sticker') {
+      const stickerData = await message.downloadMedia();
+  
+      // Calculate the SHA-256 hash of the sticker image
+      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+  
+      if (hash === expectedHash) {
       const chat = await message.getChat();
+      await chat.sendStateTyping();
       const messages = await chat.fetchMessages({ limit: 500 });
-      const lastMessageTimestamp = messages[messages.length - 2].timestamp;
+      const lastMessage = messages[messages.length - 2];
+      const lastMessageTimestamp = lastMessage.timestamp;
+      const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
       const messagesSinceLastHour = messages.slice(0, -1).filter(message => (
-        message.timestamp > (lastMessageTimestamp - 3600000) &&
+        message.timestamp > oneHourBeforeLastMessageTimestamp &&
         message.fromMe === false &&
-         message.body.trim() !== ''
+        message.body.trim() !== ''
       ));
+      console.log('MESSAGES:', messagesSinceLastHour);
       const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
         const contact = await message.getContact();
         const name = contact.name || 'Unknown';
         return `>>${name}: ${message.body}`;
       }))).join(' ');
+      
+      
       console.log('MESSAGES:',messageTexts)
-      const prompt2 = `Faça um resumo das últimas mensagens dessa conversa do grupo: ${messageTexts}`;
-      console.log('PROMPT:',prompt2);
-      runCompletion(prompt2).then(result => message.reply(result));
-      async function summarizeText(prompt2) {
-        const response = await openai.completions.create({
-          engine: 'text-davinci-003',
-          prompt: prompt2,
-          max_tokens: 1000,
-          n: 1,
-        });
-        return completion.data.choices[0].text; 
-        console.log('REPLY:',result)     
-      }  
-    } else if (input.length >= 2 && input.length <= 501) {
-      //////////Summarize X messages/////////////////
+      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora: ${messageTexts}`;
+      console.log('PROMPT:',prompt);
+      runCompletion(prompt).then(result => message.reply(result));
+    }  
+    //////////Summarize X messages/////////////////
+    const limit = parseInt(input[2]);
+    } else if (inputLower[0] === 'resumo' && inputLower[1] === 'pf') { 
       const limit = parseInt(input[2]);
       if (isNaN(limit)) {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
         message.reply('Por favor, forneça um número válido após "Resumo pf" para definir o limite de mensagens.');
         return;
       }
-      const chat = await message.getChat();
-      const messages = await chat.fetchMessages({ limit: limit });
-      const messageswithoutme = messages.slice(0, -1).filter(message => (
-        message.fromMe === false &&
-         message.body.trim() !== ''
-      ));
-      const messageTexts = (await Promise.all(messageswithoutme.map(async message => {
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        
-        return `>>${name}: ${message.body}`;
-      }))).join(' ');
-      console.log('MESSAGES:',messageTexts)
-      const prompt3 = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo: ${messageTexts}`;
-      console.log('PROMPT:',prompt3);
-      runCompletion(prompt3).then(result => message.reply(result));
-      async function summarizeText(prompt3) {
-        const response = await openai.completions.create({
-          engine: 'text-davinci-003',
-          prompt: prompt3,
-          max_tokens: 1000,
-          n: 1,
-        });
-        return completion.data.choices[0].text; 
-        console.log('REPLY:',result)          
+      if (input.length >= 2 && input.length <= 501) {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+        const messages = await chat.fetchMessages({ limit: limit });
+        const messageswithoutme = messages.slice(0, -1).filter(message => (
+          message.fromMe === false &&
+          message.body.trim() !== ''
+        ));
+        const messageTexts = (await Promise.all(messageswithoutme.map(async message => {
+          const contact = await message.getContact();
+          const name = contact.name || 'Unknown';
+          
+          return `>>${name}: ${message.body}`;
+        }))).join(' ');
+        console.log('MESSAGES:',messageTexts)
+        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo: ${messageTexts}`;
+        console.log('PROMPT:',prompt);
+        runCompletion(prompt).then(result => message.reply(result));
       }
-    } else {
-      message.reply('Comando inválido. Digite "Resumo pf" para obter um resumo das últimas 100 mensagens ou "Resumo pf [10-500]" para obter um resumo das últimas X mensagens.');
-    }
   }
   ////////////////Respond to #////////////////
   if(message.body.startsWith("#")) {
-      runCompletion(message.body.substring(1)).then(result => message.reply(result));
-      console.log('REQUEST:',message.body)     
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+    runCompletion(message.body.substring(1)).then(result => message.reply(result));
+    console.log('REQUEST:',message.body)     
   }
-  async function runCompletion (message) {
-    const completion = await openai.createCompletion({
-        model: "text-davinci-003",
-        prompt: message,
-        max_tokens: 1000,
-    });
-    return completion.data.choices[0].text;
-    console.log('REPLY:',result)          
+  ////////////////Ayub news///////////////////
+  if (message.hasMedia && message.type === 'sticker') {
+    const stickerData = await message.downloadMedia();
+    // Calculate the SHA-256 hash of the sticker image
+    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    // Compare sticker hash with the specified SHA hash
+    if (message.hasMedia && message.type === 'sticker' && hash === '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994') {
+      const chat = await message.getChat();
+      await chat.sendStateTyping();
+      try {
+        // Scrape news
+        const news = await scrapeNews();
+        console.log(news);
+        // Translate news to Portuguese using translate-google
+        const translatedNews = await translateToPortuguese(news);
+  
+        // Prepare reply
+        let reply = 'Aqui estão as notícias mais relevantes de hoje:\n\n';
+        translatedNews.forEach((newsItem, index) => {
+          reply += `${index + 1}. ${newsItem}\n\n`;
+        });
+  
+        // Reply to the message
+        message.reply(reply);
+      } catch (error) {
+        console.error('An error occurred:', error);
+      }
+    }
+  }
+  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+    try {
+      // Scrape news
+      const news = await scrapeNews2();
+  
+      // Prepare reply
+      let reply = 'Aqui estão as notícias sobre futebol mais relevantes de hoje:\n\n';
+      news.forEach((newsItem, index) => {
+        reply += `${index + 1}. ${newsItem.title}\n\n`;
+      });
+  
+      // Reply to the message
+      message.reply(reply);
+    } catch (error) {
+      console.error('An error occurred:', error);
+    }
+  }
+  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news') {
+    const keywords = input.slice(2).join(' ');
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+  
+    const query = `site:news.google.com ${keywords}`;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR&tbs=lr:lang_1pt,qdr:w`;
+  
+    try {
+      const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+      const page = await browser.newPage();
+      await page.goto(searchUrl);
+      await page.waitForSelector('.g');
+      const newsElements = await page.$$('.g');
+  
+      let newsTitles = [];
+      for (let i = 0; i < 5 && i < newsElements.length; i++) {
+        const titleElement = await newsElements[i].$('h3');
+        const title = await (await titleElement.getProperty('textContent')).jsonValue();
+        const numberedTitle = `${i + 1}. ${title}`; // Add the number to the title
+        newsTitles.push(numberedTitle);
+      }
+  
+      await browser.close();
+  
+      if (newsTitles.length > 0) {
+        const reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}":\n\n${newsTitles.join('\n\n')}`;
+        message.reply(reply);
+      } else {
+        message.reply(`Nenhum artigo encontrado para "${keywords}".`);
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+      message.reply('Erro ao buscar por artigos.');
+    }
   }
 });
+/////////////////////FUNCTIONS/////////////////////////
+// Function to scrape news from the website (fetches only the first 5 news)
+async function scrapeNews() {
+  const url = 'https://www.newsminimalist.com/';
+  const response = await axios.get(url);
+  const $ = cheerio.load(response.data);
+  const newsElements = $('.inline-flex.w-full.items-baseline.rounded.py-4');
+
+  const news = [];
+  newsElements.each((index, element) => {
+    if (index < 5) {
+      const newsText = $(element).find('div').text().trim();
+      news.push(newsText);
+    }
+  });
+
+  return news;
+}
+// Function to translate the news to Portuguese using translate-google
+async function translateToPortuguese(news) {
+  const translatedNews = await Promise.all(news.map(async (newsItem) => {
+    try {
+      const translation = await translate(newsItem, { to: 'pt' });
+      return translation;
+    } catch (error) {
+      console.error(`Translation failed for: ${newsItem}`, error);
+      return newsItem; // If translation fails, use the original text
+    }
+  }));
+
+  return translatedNews;
+}
+// Function to scrape news from the website
+async function scrapeNews2() {
+  const url = 'https://ge.globo.com/futebol/';
+  const response = await axios.get(url);
+  const $ = cheerio.load(response.data);
+  const newsElements = $('.feed-post-body');
+
+  const news = [];
+  newsElements.each((index, element) => {
+    if (index < 5) {
+      const title = $(element).find('.feed-post-body-title a').text().trim();
+      const summary = $(element).find('.feed-post-body-resumo').text().trim();
+      const link = $(element).find('.feed-post-body-title a').attr('href');
+
+      const newsItem = {
+        title,
+        summary,
+        link,
+      };
+
+      news.push(newsItem);
+    }
+  });
+
+  return news;
+}
+async function runCompletion (message) {
+  const completion = await openai.createCompletion({
+      model: "text-davinci-003",
+      prompt: message,
+      max_tokens: 1000,
+  });
+  return completion.data.choices[0].text;
+  console.log('REPLY:',result)          
+}
+async function summarizeText(prompt) {
+  const response = await openai.completions.create({
+    engine: 'text-davinci-003',
+    prompt: prompt,
+    max_tokens: 1000,
+    n: 1,
+  });
+  return completion.data.choices[0].text;      
+}
