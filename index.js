@@ -11,8 +11,7 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const translate = require('translate-google');
-
-
+const { http, https } = require('follow-redirects');
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -288,6 +287,37 @@ client.on('message', async message => {
       message.reply('Erro ao buscar por artigos.');
     }
   }
+  
+  const contactName = (await message.getContact()).name;
+  const messageBody = message.body;
+  const linkRegex = /(https?:\/\/[^\s]+)/g;
+  const links = messageBody.match(linkRegex);
+  
+  if (contactName === 'Rodrigo "News" Ayub' && links && links.length > 0) {
+    console.log('received');
+    const link = links[0];
+    console.log(link);
+    try {
+      const unshortenedLink = await unshortenLink(link);
+      console.log(unshortenedLink);
+      let pageContent = await getPageContent(unshortenedLink);
+      console.log(pageContent);
+  
+      const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}`;
+      console.log(prompt);
+  
+      const summary = await runCompletion(prompt);
+      console.log(summary);
+  
+      message.reply(summary);
+    } catch (error) {
+      console.error('Error accessing link to generate summary:', error);
+      message.reply('Eu não consegui acessar o link para fazer um resumo.');
+    }
+  }
+  
+  
+  
 });
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
@@ -347,21 +377,65 @@ async function scrapeNews2() {
 
   return news;
 }
-async function runCompletion (message) {
+async function runCompletion(prompt) {
   const completion = await openai.createCompletion({
       model: "text-davinci-003",
-      prompt: message,
+      prompt: prompt,
       max_tokens: 1000,
   });
   return completion.data.choices[0].text;
   console.log('REPLY:',result)          
 }
-async function summarizeText(prompt) {
-  const response = await openai.completions.create({
-    engine: 'text-davinci-003',
-    prompt: prompt,
-    max_tokens: 1000,
-    n: 1,
+
+
+// Helper function to extract the link from a message text
+function extractLink(messageText) {
+  const regex = /(https?:\/\/[^\s]+)/g;
+  const match = messageText.match(regex);
+  return match ? match[0] : '';
+}
+
+// Helper function to unshorten a shortened link
+async function unshortenLink(link) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      method: 'HEAD',
+      timeout: 5000, // Adjust the timeout value as needed
+    };
+
+    const client = link.startsWith('https') ? https : http;
+    const request = client.request(link, options, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        resolve(response.headers.location);
+      } else {
+        resolve(link);
+      }
+    });
+
+    request.on('error', (error) => {
+      console.error('Error unshortening URL:', error);
+      resolve(link);
+    });
+
+    request.end();
   });
-  return completion.data.choices[0].text;      
+}
+
+// Helper function to retrieve the content of a web page
+async function getPageContent(url) {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.goto(url);
+
+  const textContent = await page.evaluate(() => {
+    // Extract text content from the page
+    const bodyElement = document.querySelector('body');
+    let content = bodyElement.innerText;
+    content = content.substring(0, 5000); // Grab the first 5000 characters
+    content = content.replace(/\n/g, ""); // Remove line breaks
+    return content;
+  });
+
+  await browser.close();
+  return textContent;
 }
