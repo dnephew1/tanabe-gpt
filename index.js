@@ -240,28 +240,45 @@ client.on('message', async message => {
     const chat = await message.getChat();
     await chat.sendStateTyping();
   
-    const query = `site:news.google.com ${keywords}`;
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&lr=lang_pt&hl=pt-BR&gl=BR&tbs=lr:lang_1pt,qdr:w`;
+    const query = `${keywords}`;
+    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iar=news&df=w&ia=news&kl=br-pt`;
   
     try {
       const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
       const page = await browser.newPage();
       await page.goto(searchUrl);
-      await page.waitForSelector('.g');
-      const newsElements = await page.$$('.g');
+      await page.waitForSelector('.result__body');
+      const newsElements = await page.$$('.result__body');
   
-      let newsTitles = [];
+      let newsData = [];
       for (let i = 0; i < 5 && i < newsElements.length; i++) {
-        const titleElement = await newsElements[i].$('h3');
+        const titleElement = await newsElements[i].$('.result__a[rel="noopener"]');
         const title = await (await titleElement.getProperty('textContent')).jsonValue();
-        const numberedTitle = `${i + 1}. ${title}`; // Add the number to the title
-        newsTitles.push(numberedTitle);
+        const sourceElement = await newsElements[i].$('.result__url');
+        const source = await (await sourceElement.getProperty('textContent')).jsonValue();
+        const timeElement = await newsElements[i].$('.result__timestamp');
+        const time = await (await timeElement.getProperty('textContent')).jsonValue();
+        const previewElement = await newsElements[i].$('.result__snippet');
+        const preview = await (await previewElement.getProperty('textContent')).jsonValue();
+
+  
+        const newsItem = {
+          title,
+          preview,
+          source,
+          time
+        };
+        newsData.push(newsItem);
       }
   
       await browser.close();
   
-      if (newsTitles.length > 0) {
-        const reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}":\n\n${newsTitles.join('\n\n')}`;
+      if (newsData.length > 0) {
+        let reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}":\n\n`;
+        newsData.forEach((item, index) => {
+          const numberedTitle = `${index + 1}. *${item.title}*\nPreview: ${item.preview}\nHora: ${item.time}\nFonte: ${item.source}\n\n`;
+          reply += numberedTitle;
+        });
         message.reply(reply);
       } else {
         message.reply(`Nenhum artigo encontrado para "${keywords}".`);
