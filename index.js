@@ -294,6 +294,8 @@ client.on('message', async message => {
   const links = messageBody.match(linkRegex);
   
   if (contactName === 'Rodrigo "News" Ayub' && links && links.length > 0) {
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
     console.log('received');
     const link = links[0];
     console.log(link);
