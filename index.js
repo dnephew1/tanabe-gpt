@@ -234,7 +234,7 @@ client.on('message', async message => {
       console.error('An error occurred:', error);
     }
   }
-  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news') {
+  if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && !inputLower.includes('fut')) {
     const keywords = input.slice(2).join(' ');
     const chat = await message.getChat();
     await chat.sendStateTyping();
