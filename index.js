@@ -109,7 +109,7 @@ client.on('message', async message => {
       const quotedMessage = await message.getQuotedMessage();
       const quotedText = quotedMessage.body;
       console.log('QUOTE:',quotedMessage.body);
-      const prompt = `Faça um resumo desse texto: ${quotedText}`;
+      const prompt = `Faça um resumo desse texto: ${quotedText}.`;
       console.log('PROMPT:',prompt);
       runCompletion(prompt).then(result => {
         message.reply(result);
@@ -146,7 +146,7 @@ client.on('message', async message => {
       
       
       console.log('MESSAGES:',messageTexts)
-      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora: ${messageTexts}`;
+      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora: ${messageTexts}.`;
       console.log('PROMPT:',prompt);
       runCompletion(prompt).then(result => message.reply(result));
     }  
@@ -175,7 +175,7 @@ client.on('message', async message => {
           return `>>${name}: ${message.body}`;
         }))).join(' ');
         console.log('MESSAGES:',messageTexts)
-        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo: ${messageTexts}`;
+        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo: ${messageTexts}.`;
         console.log('PROMPT:',prompt);
         runCompletion(prompt).then(result => message.reply(result));
       }
@@ -304,7 +304,7 @@ client.on('message', async message => {
       let pageContent = await getPageContent(unshortenedLink);
       console.log(pageContent);
   
-      const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}`;
+      const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}.`;
       console.log(prompt);
   
       const summary = await runCompletion(prompt);
