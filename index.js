@@ -186,9 +186,11 @@ client.on('message', async message => {
     await chat.sendStateTyping();
     runCompletion(message.body.substring(1)).then(result => message.reply(result));
     console.log('REQUEST:',message.body)     
+    console.log('REPLY:',result)
   }
   ////////////////Ayub news///////////////////
   if (message.hasMedia && message.type === 'sticker') {
+    console.log('AYUB NEWS')
     const stickerData = await message.downloadMedia();
     // Calculate the SHA-256 hash of the sticker image
     const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
@@ -199,7 +201,6 @@ client.on('message', async message => {
       try {
         // Scrape news
         const news = await scrapeNews();
-        console.log(news);
         // Translate news to Portuguese using translate-google
         const translatedNews = await translateToPortuguese(news);
   
@@ -211,12 +212,14 @@ client.on('message', async message => {
   
         // Reply to the message
         message.reply(reply);
+        console.log('NEWS:',reply)
       } catch (error) {
         console.error('An error occurred:', error);
       }
     }
   }
   if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
+    console.log('AYUB NEWS FUT')
     const chat = await message.getChat();
     await chat.sendStateTyping();
     try {
@@ -231,12 +234,14 @@ client.on('message', async message => {
   
       // Reply to the message
       message.reply(reply);
+      console('NEWS FUT:',reply)
     } catch (error) {
       console.error('An error occurred:', error);
     }
   }
   if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && !inputLower.includes('fut')) {
     const keywords = input.slice(2).join(' ');
+    console.log('AYUB NEWS',input[2])
     const chat = await message.getChat();
     await chat.sendStateTyping();
   
@@ -280,6 +285,7 @@ client.on('message', async message => {
           reply += numberedTitle;
         });
         message.reply(reply);
+        console.log('NEWS:',reply)
       } else {
         message.reply(`Nenhum artigo encontrado para "${keywords}".`);
       }
@@ -293,6 +299,7 @@ client.on('message', async message => {
   const links = messageBody.match(linkRegex);
   
   if (contactName === 'Rodrigo "News" Ayub' && links && links.length > 0) {
+    console.log('AYUB NEWS')
     const chat = await message.getChat();
     await chat.sendStateTyping();
     console.log('received');
@@ -311,6 +318,7 @@ client.on('message', async message => {
       console.log(summary);
   
       message.reply(summary);
+      console.log('NEWS:',summary)
     } catch (error) {
       console.error('Error accessing link to generate summary:', error);
       message.reply('Eu não consegui acessar o link para fazer um resumo.');
