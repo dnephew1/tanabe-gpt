@@ -75,7 +75,8 @@ let page;
 
 ///////////////////Script/////////////////////////
 client.on('message', async message => {
-  console.log('MESSAGE:',message.body);
+  const contactName = (await message.getContact()).name;
+  console.log(contactName,':',message.body);
   const input = message.body.split(' ');
   const inputLower = input.map(item => item.toLowerCase());
   const expectedHash = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
@@ -287,9 +288,7 @@ client.on('message', async message => {
       message.reply('Erro ao buscar por artigos.');
     }
   }
-  
-  const contactName = (await message.getContact()).name;
-  const messageBody = message.body;
+    const messageBody = message.body;
   const linkRegex = /(https?:\/\/[^\s]+)/g;
   const links = messageBody.match(linkRegex);
   
