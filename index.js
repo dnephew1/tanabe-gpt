@@ -75,6 +75,9 @@ let page;
 
 ///////////////////Script/////////////////////////
 client.on('message', async message => {
+  const messageBody = message.body;
+  const linkRegex = /(https?:\/\/[^\s]+)/g;
+  const links = messageBody.match(linkRegex);
   const contactName = (await message.getContact()).name;
   console.log(contactName,':',message.body);
   const input = message.body.split(' ');
@@ -294,15 +297,11 @@ client.on('message', async message => {
       message.reply('Erro ao buscar por artigos.');
     }
   }
-    const messageBody = message.body;
-  const linkRegex = /(https?:\/\/[^\s]+)/g;
-  const links = messageBody.match(linkRegex);
   
   if (contactName === 'Rodrigo "News" Ayub' && links && links.length > 0) {
     console.log('AYUB NEWS')
     const chat = await message.getChat();
     await chat.sendStateTyping();
-    console.log('received');
     const link = links[0];
     console.log(link);
     try {
@@ -324,8 +323,41 @@ client.on('message', async message => {
       message.reply('Eu não consegui acessar o link para fazer um resumo.');
     }
   }
+  if (message.hasMedia && message.type === 'sticker'  && links && links.length > 0) {
+      const stickerData = await message.downloadMedia();
   
+      // Calculate the SHA-256 hash of the sticker image
+      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
   
+      if (hash === expectedHash) {
+      console.log('RESUMO DE LINK')
+      const chat = await message.getChat();
+      const messageBody = message.body;
+      const linkRegex = /(https?:\/\/[^\s]+)/g;
+      const links = messageBody.match(linkRegex);
+      await chat.sendStateTyping();
+      const link = links[0];
+      console.log(link);
+      try {
+        const unshortenedLink = await unshortenLink(link);
+        console.log(unshortenedLink);
+        let pageContent = await getPageContent(unshortenedLink);
+        console.log(pageContent);
+    
+        const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}.`;
+        console.log(prompt);
+    
+        const summary = await runCompletion(prompt);
+        console.log(summary);
+    
+        message.reply(summary);
+        console.log('LINK:',summary)
+      } catch (error) {
+        console.error('Error accessing link to generate summary:', error);
+        message.reply('Eu não consegui acessar o link para fazer um resumo.');
+      }
+    }
+  }
   
 });
 /////////////////////FUNCTIONS/////////////////////////
