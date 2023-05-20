@@ -284,7 +284,7 @@ client.on('message', async message => {
     const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iar=news&df=w&ia=news&kl=br-pt`;
   
     try {
-      const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+      const browser = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] });
       const page = await browser.newPage();
       await page.goto(searchUrl);
       await page.waitForSelector('.result__body');
