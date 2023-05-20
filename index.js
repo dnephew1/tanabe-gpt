@@ -27,7 +27,7 @@ const client = new Client({
     session: sessionData,
     puppeteer: {
       headless: true,
-      args: ['--no-sandbox'],},
+      args: ['--no-sandbox','--disable-setuid-sandbox'],},
     authStrategy: new LocalAuth(),
 });
 
