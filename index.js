@@ -220,8 +220,6 @@ client.on('message', async message => {
     const chat = await message.getChat();
     await chat.sendStateTyping();
     runCompletion(message.body.substring(1)).then(result => message.reply(result));
-    console.log('REQUEST:',message.body)     
-    console.log('REPLY:',result)
   }
   ////////////////Ayub news///////////////////
   if (message.hasMedia && message.type === 'sticker') {
