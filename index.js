@@ -353,6 +353,51 @@ client.on('message', async message => {
       message.reply('Eu não consegui acessar o link para fazer um resumo.');
     }
   }
+
+  if (message.body.includes('@all') && !message.hasQuotedMsg) {
+    let chat = await message.getChat();
+
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+        let text = '';
+        let mentions = [];
+
+        for(let participant of chat.participants) {
+            let contact = await client.getContactById(participant.id._serialized);
+            mentions.push(contact);
+            text += `@${contact.number} `;
+        }
+
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+        });
+    }
+}
+
+if (message.hasQuotedMsg && message.body.includes('@all')) {
+  const quotedMessage = await message.getQuotedMessage();
+  const chat = await message.getChat();
+
+  // Make sure this is a group chat
+  if(chat.isGroup) {
+    let text = '';
+    let mentions = [];
+
+    for(let participant of chat.participants) {
+        let contact = await client.getContactById(participant.id._serialized);
+        mentions.push(contact);
+        text += `@${contact.number} `;
+    }
+
+      chat.sendMessage(text, {
+          mentions,
+          quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+      });
+  }
+}
+
+
   
 });
 /////////////////////FUNCTIONS/////////////////////////
