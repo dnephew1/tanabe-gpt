@@ -542,6 +542,54 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
           });
     }
   }
+  if (message.body.toLowerCase().includes('@cartola') && !message.hasQuotedMsg) {
+    let chat = await message.getChat();
+  
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+        });
+    }
+  }
+  
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@ccartola') ) {
+    const quotedMessage = await message.getQuotedMessage();
+    const chat = await message.getChat();
+  
+      // Make sure this is a group chat
+      if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+          chat.sendMessage(text, {
+              mentions,
+              quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+          });
+    }
+  }
 });
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
