@@ -566,7 +566,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
   
-    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@ccartola') ) {
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@cartola') ) {
     const quotedMessage = await message.getQuotedMessage();
     const chat = await message.getChat();
   
