@@ -353,8 +353,8 @@ client.on('message', async message => {
       message.reply('Eu não consegui acessar o link para fazer um resumo.');
     }
   }
-
-  if (message.body.includes('@all') && !message.hasQuotedMsg) {
+//////////////////////TAGS/////////////////////////////
+  if (message.body.toLowerCase().includes('@all') && !message.hasQuotedMsg) {
     let chat = await message.getChat();
 
     // Make sure this is a group chat
@@ -375,7 +375,7 @@ client.on('message', async message => {
     }
 }
 
-if (message.hasQuotedMsg && message.body.includes('@all')) {
+if (message.hasQuotedMsg && message.body.toLowerCase().includes('@all')) {
   const quotedMessage = await message.getQuotedMessage();
   const chat = await message.getChat();
 
@@ -398,7 +398,150 @@ if (message.hasQuotedMsg && message.body.includes('@all')) {
 }
 
 
+if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
+  let chat = await message.getChat();
+
+  // Make sure this is a group chat
+  if(chat.isGroup) {
+      let mentions = [];
+
+      for(let participant of chat.participants) {
+        let contact = await client.getContactById(participant.id._serialized);
+        if(participant.isAdmin) {
+            mentions.push(contact);
+        }
+    }
+
+    let text = mentions.map(contact => `@${contact.number}`).join(' ');
+
+      chat.sendMessage(text, {
+          mentions,
+          quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+      });
+    }
+  }
+
+  if (message.hasQuotedMsg && message.body.toLowerCase().includes('@admin')) {
+  const quotedMessage = await message.getQuotedMessage();
+  const chat = await message.getChat();
+
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+      let mentions = [];
+
+      for(let participant of chat.participants) {
+        let contact = await client.getContactById(participant.id._serialized);
+        if(participant.isAdmin) {
+            mentions.push(contact);
+        }
+    }
+
+    let text = mentions.map(contact => `@${contact.number}`).join(' ');
+
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+        });
+    }
+  }
   
+  if (message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('médicos') && !message.hasQuotedMsg) {
+    let chat = await message.getChat();
+  
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Costa') || contact.name.includes('Maddi')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+        });
+    }
+  }
+  
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('médicos')) {
+    const quotedMessage = await message.getQuotedMessage();
+    const chat = await message.getChat();
+  
+      // Make sure this is a group chat
+      if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Costa') || contact.name.includes('Maddi')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+          chat.sendMessage(text, {
+              mentions,
+              quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+          });
+    }
+  }
+
+  if (message.body.toLowerCase().includes('@engenheiros') && !message.hasQuotedMsg) {
+    let chat = await message.getChat();
+  
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+        });
+    }
+  }
+  
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@engenheiros') ) {
+    const quotedMessage = await message.getQuotedMessage();
+    const chat = await message.getChat();
+  
+      // Make sure this is a group chat
+      if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+          chat.sendMessage(text, {
+              mentions,
+              quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+          });
+    }
+  }
 });
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
