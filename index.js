@@ -504,7 +504,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')) {
+          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')|| contact.name.includes('Boacnin')) {
               mentions.push(contact);
           }
       }
@@ -529,7 +529,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')) {
+          if(contact.name.includes('Ormundo') || contact.name.includes('João')|| contact.name.includes('Parolin')|| contact.name.includes('Boacnin')) {
               mentions.push(contact);
           }
       }
