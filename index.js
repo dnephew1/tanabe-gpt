@@ -445,7 +445,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
   
-  if (message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('médicos') && !message.hasQuotedMsg) {
+  if (message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('@médicos') && !message.hasQuotedMsg) {
     let chat = await message.getChat();
   
     // Make sure this is a group chat
@@ -455,7 +455,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Costa') || contact.name.includes('Maddi')) {
+          if(contact.name.includes('Maddi') || contact.name.includes('Costa')) {
               mentions.push(contact);
           }
       }
@@ -469,7 +469,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
   
-    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('médicos')) {
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('@médicos') ) {
     const quotedMessage = await message.getQuotedMessage();
     const chat = await message.getChat();
   
@@ -480,7 +480,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Costa') || contact.name.includes('Maddi')) {
+          if(contact.name.includes('Maddi') || contact.name.includes('Costa')) {
               mentions.push(contact);
           }
       }
