@@ -600,7 +600,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')) {
+          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')|| contact.name.includes('Madasi')) {
               mentions.push(contact);
           }
       }
@@ -625,7 +625,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')) {
+          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')|| contact.name.includes('Madasi')) {
               mentions.push(contact);
           }
       }
