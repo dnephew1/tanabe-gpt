@@ -445,7 +445,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
   
-  if (message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('@médicos') && !message.hasQuotedMsg) {
+  if (message.body.toLowerCase().includes('@medicos') && !message.hasQuotedMsg) {
     let chat = await message.getChat();
   
     // Make sure this is a group chat
@@ -469,7 +469,55 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
   
-    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@medicos') || message.body.toLowerCase().includes('@médicos') ) {
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@medicos')) {
+    const quotedMessage = await message.getQuotedMessage();
+    const chat = await message.getChat();
+  
+      // Make sure this is a group chat
+      if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Maddi') || contact.name.includes('Costa')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+          chat.sendMessage(text, {
+              mentions,
+              quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
+          });
+    }
+  }
+  if (message.body.toLowerCase().includes('@médicos') && !message.hasQuotedMsg) {
+    let chat = await message.getChat();
+  
+    // Make sure this is a group chat
+    if(chat.isGroup) {
+        let mentions = [];
+  
+        for(let participant of chat.participants) {
+          let contact = await client.getContactById(participant.id._serialized);
+
+          if(contact.name.includes('Maddi') || contact.name.includes('Costa')) {
+              mentions.push(contact);
+          }
+      }
+  
+      let text = mentions.map(contact => `@${contact.number}`).join(' ');
+  
+        chat.sendMessage(text, {
+            mentions,
+            quotedMessageId: message.id._serialized // This will quote the message that includes "@all"
+        });
+    }
+  }
+  
+    if (message.hasQuotedMsg && message.body.toLowerCase().includes('@médicos')) {
     const quotedMessage = await message.getQuotedMessage();
     const chat = await message.getChat();
   
