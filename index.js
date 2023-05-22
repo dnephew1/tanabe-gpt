@@ -328,7 +328,7 @@ client.on('message', async message => {
     }
   }
   
-  if (contactName === 'Rodrigo "News" Ayub' && links && links.length > 0) {
+  if (contact.name.includes('Ayub') && links && links.length > 0) {
     console.log('AYUB NEWS')
     const chat = await message.getChat();
     await chat.sendStateTyping();
@@ -600,7 +600,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         for(let participant of chat.participants) {
           let contact = await client.getContactById(participant.id._serialized);
 
-          if(contact.name.includes('Mdasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')|| contact.name.includes('Madasi')) {
+          if(contact.name.includes('Madasi') || contact.name.includes('Boacnin')|| contact.name.includes('Costa')|| contact.name.includes('Dybwad')|| contact.name.includes('Ricardo')|| contact.name.includes('Parolin')) {
               mentions.push(contact);
           }
       }
