@@ -327,8 +327,8 @@ client.on('message', async message => {
       message.reply('Erro ao buscar por artigos.');
     }
   }
-  
-  if (contact.name.includes('Ayub') && links && links.length > 0) {
+
+  if (contactName.includes('Ayub') && links && links.length > 0) {
     console.log('AYUB NEWS')
     const chat = await message.getChat();
     await chat.sendStateTyping();
