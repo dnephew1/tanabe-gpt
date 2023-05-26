@@ -129,7 +129,7 @@ client.on('message', async message => {
           let pageContent = await getPageContent(unshortenedLink);
           console.log(pageContent);
 
-          const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}.`;
+          const prompt = `Faça um curto resumo desse texto:\n"${pageContent}."`;
           console.log(prompt);
 
           const summary = await runCompletion(prompt);
@@ -176,12 +176,12 @@ client.on('message', async message => {
       const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
         const contact = await message.getContact();
         const name = contact.name || 'Unknown';
-        return `>>${name}: ${message.body}`;
+        return `>>${name}: ${message.body}.\n`;
       }))).join(' ');
       
       
       console.log('MESSAGES:',messageTexts)
-      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora: ${messageTexts}.`;
+      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
       console.log('PROMPT:',prompt);
       runCompletion(prompt).then(result => message.reply(result));
     }  
@@ -207,10 +207,10 @@ client.on('message', async message => {
           const contact = await message.getContact();
           const name = contact.name || 'Unknown';
           
-          return `>>${name}: ${message.body}`;
+          return `>>${name}: ${message.body}.\n`;
         }))).join(' ');
         console.log('MESSAGES:',messageTexts)
-        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo: ${messageTexts}.`;
+        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo:\n${messageTexts}`;
         console.log('PROMPT:',prompt);
         runCompletion(prompt).then(result => message.reply(result));
       }
@@ -702,11 +702,10 @@ async function runCompletion(prompt) {
       model: "text-davinci-003",
       prompt: prompt,
       max_tokens: 1000,
+      temperature: 0.2,
   });
-  return completion.data.choices[0].text;
-  console.log('REPLY:',result)          
+  return completion.data.choices[0].text;          
 }
-
 
 // Helper function to extract the link from a message text
 function extractLink(messageText) {
