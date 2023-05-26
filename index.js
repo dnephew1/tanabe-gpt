@@ -1,6 +1,6 @@
 ///////////////////Setup//////////////////////
 // Import necessary modules
-const { Client , LocalAuth } = require('whatsapp-web.js');
+const { Client , LocalAuth, Reaction } = require('whatsapp-web.js');
 const fs = require('fs');
 const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
@@ -12,6 +12,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
+const { id } = require('translate-google/languages');
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -135,17 +136,35 @@ client.on('message', async message => {
           const summary = await runCompletion(prompt);
           console.log(summary);
 
-          message.reply(summary);
+          message.reply(summary)
+          .then(sentMessage => {
+            // Delete the bot's message after 10 seconds
+            setTimeout(() => {
+              sentMessage.delete(true);
+            }, 5*60*1000);
+          });;
           console.log('LINK:',summary)
         } catch (error) {
           console.error('Error accessing link to generate summary:', error);
-          message.reply('Eu não consegui acessar o link para fazer um resumo.');
+          message.reply('Eu não consegui acessar o link para fazer um resumo.')
+          .then(sentMessage => {
+            // Delete the bot's message after 10 seconds
+            setTimeout(() => {
+              sentMessage.delete(true);
+            }, 5*60*1000);
+          });;
         }
       } else {
         const prompt = `Faça um resumo desse texto: ${quotedText}.`;
         console.log('PROMPT:',prompt);
         runCompletion(prompt).then(result => {
-          message.reply(result);
+          message.reply(result)
+          .then(sentMessage => {
+            // Delete the bot's message after 10 seconds
+            setTimeout(() => {
+              sentMessage.delete(true);
+            }, 5*60*1000);
+          });;
           console.log('REPLY:', result);
         });
       }
@@ -183,7 +202,13 @@ client.on('message', async message => {
       console.log('MESSAGES:',messageTexts)
       const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
       console.log('PROMPT:',prompt);
-      runCompletion(prompt).then(result => message.reply(result));
+      runCompletion(prompt).then(result => message.reply(result))
+      .then(sentMessage => {
+        // Delete the bot's message after 10 seconds
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });;
     }  
     //////////Summarize X messages/////////////////
     const limit = parseInt(input[2]);
@@ -192,7 +217,13 @@ client.on('message', async message => {
       if (isNaN(limit)) {
         const chat = await message.getChat();
         await chat.sendStateTyping();
-        message.reply('Por favor, forneça um número válido após "Resumo pf" para definir o limite de mensagens.');
+        message.reply('Por favor, forneça um número válido após "Resumo pf" para definir o limite de mensagens.')
+        .then(sentMessage => {
+          // Delete the bot's message after 10 seconds
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5*60*1000);
+        });;
         return;
       }
       if (input.length >= 2 && input.length <= 501) {
@@ -212,15 +243,30 @@ client.on('message', async message => {
         console.log('MESSAGES:',messageTexts)
         const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo:\n${messageTexts}`;
         console.log('PROMPT:',prompt);
-        runCompletion(prompt).then(result => message.reply(result));
+        runCompletion(prompt).
+        then(result => message.reply(result))
+        .then(sentMessage => {
+          // Delete the bot's message after 5mins
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5*60*1000);
+        });;
       }
   }
   ////////////////Respond to #////////////////
-  if(message.body.startsWith("#")) {
+  if (message.body.startsWith("#")) {
     const chat = await message.getChat();
     await chat.sendStateTyping();
-    runCompletion(message.body.substring(1)).then(result => message.reply(result));
+    runCompletion(message.body.substring(1))
+      .then(result => message.reply(result))
+      .then(sentMessage => {
+        // Delete the bot's message after 5mins
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });
   }
+  
   ////////////////Ayub news///////////////////
   if (message.hasMedia && message.type === 'sticker') {
     console.log('AYUB NEWS')
@@ -244,7 +290,13 @@ client.on('message', async message => {
         });
   
         // Reply to the message
-        message.reply(reply);
+        message.reply(reply)
+        .then(sentMessage => {
+          // Delete the bot's message after 10 seconds
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5*60*1000);
+        });;
         console.log('NEWS:',reply)
       } catch (error) {
         console.error('An error occurred:', error);
@@ -266,7 +318,13 @@ client.on('message', async message => {
       });
   
       // Reply to the message
-      message.reply(reply);
+      message.reply(reply)
+      .then(sentMessage => {
+        // Delete the bot's message after 10 seconds
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });;
       console('NEWS FUT:',reply)
     } catch (error) {
       console.error('An error occurred:', error);
@@ -317,14 +375,32 @@ client.on('message', async message => {
           const numberedTitle = `${index + 1}. *${item.title}*\nPreview: ${item.preview}\nHora: ${item.time}\nFonte: ${item.source}\n\n`;
           reply += numberedTitle;
         });
-        message.reply(reply);
+        message.reply(reply)
+        .then(sentMessage => {
+          // Delete the bot's message after 10 seconds
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5*60*1000);
+        });;
         console.log('NEWS:',reply)
       } else {
-        message.reply(`Nenhum artigo encontrado para "${keywords}".`);
+        message.reply(`Nenhum artigo encontrado para "${keywords}".`)
+        .then(sentMessage => {
+          // Delete the bot's message after 10 seconds
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5*60*1000);
+        });;
       }
     } catch (error) {
       console.error('An error occurred:', error);
-      message.reply('Erro ao buscar por artigos.');
+      message.reply('Erro ao buscar por artigos.')
+      .then(sentMessage => {
+        // Delete the bot's message after 10 seconds
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });;
     }
   }
 
@@ -346,11 +422,23 @@ client.on('message', async message => {
       const summary = await runCompletion(prompt);
       console.log(summary);
   
-      message.reply(summary);
+      message.reply(summary)
+      .then(sentMessage => {
+        // Delete the bot's message after 10 seconds
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });;
       console.log('NEWS:',summary)
     } catch (error) {
       console.error('Error accessing link to generate summary:', error);
-      message.reply('Eu não consegui acessar o link para fazer um resumo.');
+      message.reply('Eu não consegui acessar o link para fazer um resumo.')
+      .then(sentMessage => {
+        // Delete the bot's message after 10 seconds
+        setTimeout(() => {
+          sentMessage.delete(true);
+        }, 5*60*1000);
+      });;
     }
   }
 //////////////////////TAGS/////////////////////////////
