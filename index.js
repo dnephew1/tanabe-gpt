@@ -134,6 +134,7 @@ client.on('message', async message => {
           console.log(prompt);
 
           const summary = await runCompletion(prompt);
+          summary = summary.trim()
           console.log(summary);
 
           message.reply(summary)
@@ -157,16 +158,17 @@ client.on('message', async message => {
       } else {
         const prompt = `Faça um resumo desse texto: ${quotedText}.`;
         console.log('PROMPT:',prompt);
-        runCompletion(prompt).then(result => {
-          message.reply(result)
-          .then(sentMessage => {
-            // Delete the bot's message after 10 seconds
-            setTimeout(() => {
-              sentMessage.delete(true);
-            }, 5*60*1000);
-          });;
-          console.log('REPLY:', result);
-        });
+        runCompletion(prompt)
+        .then(result => result.trim())
+          .then(result => {message.reply(result)
+            .then(sentMessage => {
+              // Delete the bot's message after 10 seconds
+              setTimeout(() => {
+                sentMessage.delete(true);
+              }, 5*60*1000);
+            });;
+            console.log('REPLY:', result);
+          });
       }
       return;
     }
@@ -202,13 +204,15 @@ client.on('message', async message => {
       console.log('MESSAGES:',messageTexts)
       const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
       console.log('PROMPT:',prompt);
-      runCompletion(prompt).then(result => message.reply(result))
-      .then(sentMessage => {
-        // Delete the bot's message after 10 seconds
-        setTimeout(() => {
-          sentMessage.delete(true);
-        }, 5*60*1000);
-      });;
+      runCompletion(prompt)
+      .then(result => result.trim())
+        .then(result => message.reply(result))
+          .then(sentMessage => {
+            // Delete the bot's message after 10 seconds
+            setTimeout(() => {
+              sentMessage.delete(true);
+            }, 5*60*1000);
+          });;
     }  
     //////////Summarize X messages/////////////////
     const limit = parseInt(input[2]);
@@ -243,14 +247,15 @@ client.on('message', async message => {
         console.log('MESSAGES:',messageTexts)
         const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo:\n${messageTexts}`;
         console.log('PROMPT:',prompt);
-        runCompletion(prompt).
-        then(result => message.reply(result))
-        .then(sentMessage => {
-          // Delete the bot's message after 5mins
-          setTimeout(() => {
-            sentMessage.delete(true);
-          }, 5*60*1000);
-        });;
+        runCompletion(prompt)
+        .then(result => result.trim())
+          .then(result => message.reply(result))
+            .then(sentMessage => {
+              // Delete the bot's message after 5mins
+              setTimeout(() => {
+                sentMessage.delete(true);
+              }, 5*60*1000);
+          });;
       }
   }
   ////////////////Respond to #////////////////
@@ -258,6 +263,7 @@ client.on('message', async message => {
     const chat = await message.getChat();
     await chat.sendStateTyping();
     runCompletion(message.body.substring(1))
+      .then(result => result.trim())
       .then(result => message.reply(result))
       .then(sentMessage => {
         // Delete the bot's message after 5mins
@@ -790,7 +796,8 @@ async function runCompletion(prompt) {
       model: "text-davinci-003",
       prompt: prompt,
       max_tokens: 1000,
-      temperature: 0.2,
+      temperature: 1,
+      presence_penalty: -1,
   });
   return completion.data.choices[0].text;          
 }
