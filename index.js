@@ -1,6 +1,6 @@
 ///////////////////Setup//////////////////////
 // Import necessary modules
-const { Client , LocalAuth, Reaction } = require('whatsapp-web.js');
+const { Client , LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const qrcode = require('qrcode-terminal');
 const { Configuration, OpenAIApi } = require('openai');
@@ -13,6 +13,7 @@ const cheerio = require('cheerio');
 const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
 const { id } = require('translate-google/languages');
+
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -259,7 +260,7 @@ client.on('message', async message => {
       }
   }
   ////////////////Respond to #////////////////
-  if (message.body.startsWith("#")) {
+  if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
     const chat = await message.getChat();
     await chat.sendStateTyping();
     runCompletion(message.body.substring(1))
@@ -731,6 +732,11 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
               quotedMessageId: quotedMessage.id._serialized // This will quote the originally quoted message
           });
     }
+  }
+///////Sticker////////
+  if (message.hasMedia && message.body.includes('#sticker')) {
+    const attachmentData = await message.downloadMedia();
+    message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
   }
 });
 /////////////////////FUNCTIONS/////////////////////////
