@@ -1,4 +1,4 @@
-///////////////////Setup//////////////////////
+///////////////////SETUP//////////////////////
 // Import necessary modules
 const { Client , LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
@@ -13,7 +13,7 @@ const cheerio = require('cheerio');
 const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
 const { id } = require('translate-google/languages');
-
+const sentMessages = new Map();
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -75,7 +75,7 @@ client.on('disconnected', (reason) => {
 // Declare the page variable outside of the event listener
 let page;
 
-///////////////////Script/////////////////////////
+///////////////////SCRIPT/////////////////////////
 client.on('message', async message => {
   const messageBody = message.body;
   const linkRegex = /(https?:\/\/[^\s]+)/g;
@@ -97,11 +97,8 @@ client.on('message', async message => {
 
     fs.writeFileSync(savePath, stickerData.data);
 
-    console.log(`Sticker saved to: ${savePath}`);
-
     // Calculate the SHA-256 hash of the saved sticker image
     const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-    console.log('SHA-256 hash:', hash);
   }
 
   if (message.hasQuotedMsg && message.hasMedia && message.type === 'sticker') {
@@ -113,7 +110,6 @@ client.on('message', async message => {
       await chat.sendStateTyping();
       const quotedMessage = await message.getQuotedMessage();
       const quotedText = quotedMessage.body;
-      console.log('QUOTE:',quotedMessage.body);
 
       // Check for links in the quoted message
       const messageBody = quotedMessage.body;
@@ -122,32 +118,22 @@ client.on('message', async message => {
 
       // If links are found, stop execution
       if (links && links.length > 0) {
-        console.log('RESUMO DE LINK')
         const link = links[0];
-        console.log(link);
         try {
           const unshortenedLink = await unshortenLink(link);
-          console.log(unshortenedLink);
+          console.log('---------------------RESUMO DE LINK---------------------\n' + 'LINK:' + unshortenedLink);
           let pageContent = await getPageContent(unshortenedLink);
-          console.log(pageContent);
+          console.log('\nTEXTO EXTRAIDO: ' + pageContent);
 
           const prompt = `Faça um curto resumo desse texto:\n"${pageContent}."`;
-          console.log(prompt);
 
           const summary = await runCompletion(prompt);
-          summary = summary.trim()
-          console.log(summary);
+          const trimmedSummary = summary.trim();
+          console.log('\nBOT: ' + trimmedSummary + '\n---------------------FIM---------------------');
 
-          message.reply(summary)
-          .then(sentMessage => {
-            // Delete the bot's message after 10 seconds
-            setTimeout(() => {
-              sentMessage.delete(true);
-            }, 5*60*1000);
-          });;
-          console.log('LINK:',summary)
+          message.reply(trimmedSummary)
         } catch (error) {
-          console.error('Error accessing link to generate summary:', error);
+          console.error('\n---------------------ERROR---------------------\nError accessing link to generate summary:', error + '\n---------------------ERROR---------------------');
           message.reply('Eu não consegui acessar o link para fazer um resumo.')
           .then(sentMessage => {
             // Delete the bot's message after 10 seconds
@@ -157,25 +143,24 @@ client.on('message', async message => {
           });;
         }
       } else {
-        const prompt = `Faça um resumo desse texto: ${quotedText}.`;
-        console.log('PROMPT:',prompt);
+        const prompt = `Faça um curto resumo desse texto: ${quotedText}.`;
+        console.log('\n---------------------RESUMO DE TEXTO---------------------\n TEXTO:',quotedText);
         runCompletion(prompt)
         .then(result => result.trim())
-          .then(result => {message.reply(result)
-            .then(sentMessage => {
-              // Delete the bot's message after 10 seconds
-              setTimeout(() => {
-                sentMessage.delete(true);
-              }, 5*60*1000);
-            });;
-            console.log('REPLY:', result);
-          });
-      }
+          .then(result => {
+              // Here, we changed message.reply(result) to quotedMessage.reply(result)
+              quotedMessage.reply(result)
+                  .then(sentMessage => {
+                      // The setTimeout function and sentMessage.delete(true) have been removed
+                  });
+              console.log('BOT: ', result +'---------------------FIM---------------------');
+        });
+    }
       return;
     }
   }
 
-  //////Summarize 1hr////////////////
+/////////////////////Summarize 1hr////////////////
     if (message.hasMedia && message.type === 'sticker' && (!links || links.length === 0)) {
       const stickerData = await message.downloadMedia();
   
@@ -194,7 +179,6 @@ client.on('message', async message => {
         message.fromMe === false &&
         message.body.trim() !== ''
       ));
-      console.log('MESSAGES:', messagesSinceLastHour);
       const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
         const contact = await message.getContact();
         const name = contact.name || 'Unknown';
@@ -202,12 +186,11 @@ client.on('message', async message => {
       }))).join(' ');
       
       
-      console.log('MESSAGES:',messageTexts)
+      console.log('\n---------------------RESUMO DE MENSAGENS---------------------\nMENSSAGENS:\n',messageTexts)
       const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
-      console.log('PROMPT:',prompt);
       runCompletion(prompt)
       .then(result => result.trim())
-        .then(result => message.reply(result))
+        .then(result => message.reply(result) + console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
           .then(sentMessage => {
             // Delete the bot's message after 10 seconds
             setTimeout(() => {
@@ -215,7 +198,7 @@ client.on('message', async message => {
             }, 5*60*1000);
           });;
     }  
-    //////////Summarize X messages/////////////////
+/////////////////////Summarize X messages/////////////////
     const limit = parseInt(input[2]);
     } else if (inputLower[0] === 'resumo' && inputLower[1] === 'pf') { 
       const limit = parseInt(input[2]);
@@ -245,12 +228,11 @@ client.on('message', async message => {
           
           return `>>${name}: ${message.body}.\n`;
         }))).join(' ');
-        console.log('MESSAGES:',messageTexts)
-        const prompt = `Faça um resumo das últimas ${limit} mensagens dessa conversa do grupo:\n${messageTexts}`;
-        console.log('PROMPT:',prompt);
+        console.log('\n---------------------RESUMO DE MENSAGENS #---------------------\nMENSSAGENS:\n',messageTexts)
+        const prompt = `Faça um resumo dessas últimas mensagens dessa conversa do grupo:\n${messageTexts}`;
         runCompletion(prompt)
         .then(result => result.trim())
-          .then(result => message.reply(result))
+          .then(result => message.reply(result)+ console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
             .then(sentMessage => {
               // Delete the bot's message after 5mins
               setTimeout(() => {
@@ -259,29 +241,37 @@ client.on('message', async message => {
           });;
       }
   }
-  ////////////////Respond to #////////////////
-  if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
-    const chat = await message.getChat();
-    await chat.sendStateTyping();
-    runCompletion(message.body.substring(1))
-      .then(result => result.trim())
-      .then(result => message.reply(result))
-      .then(sentMessage => {
-        // Delete the bot's message after 5mins
-        setTimeout(() => {
-          sentMessage.delete(true);
-        }, 5*60*1000);
-      });
+///////////////////////Respond to #////////////////
+if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
+  console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
+
+  const chat = await message.getChat();
+  await chat.sendStateTyping();
+
+  let prompt = 'CONVERSA: '+ message.body.substring(1) + '\n';
+
+  if (message.hasQuotedMsg) {
+    const quotedMessage = await message.getQuotedMessage();
+    console.log('CONTEXTO: '+ quotedMessage.body)
+    prompt += 'Para contexto adicional, a conversa esta se referindo a essa mensagem:' + quotedMessage.body + '\n';
   }
+
+  runCompletion(prompt)
+    .then(result => result.trim())
+    .then(result => {
+      console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
+      return message.reply(result);
+    })
+}
   
-  ////////////////Ayub news///////////////////
+/////////////////////Ayub news///////////////////
   if (message.hasMedia && message.type === 'sticker') {
-    console.log('AYUB NEWS')
     const stickerData = await message.downloadMedia();
     // Calculate the SHA-256 hash of the sticker image
     const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
     // Compare sticker hash with the specified SHA hash
     if (message.hasMedia && message.type === 'sticker' && hash === '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994') {
+      console.log('\n---------------------AYUB NEWS DE HOJE---------------------\n');
       const chat = await message.getChat();
       await chat.sendStateTyping();
       try {
@@ -289,29 +279,25 @@ client.on('message', async message => {
         const news = await scrapeNews();
         // Translate news to Portuguese using translate-google
         const translatedNews = await translateToPortuguese(news);
-  
+    
         // Prepare reply
         let reply = 'Aqui estão as notícias mais relevantes de hoje:\n\n';
         translatedNews.forEach((newsItem, index) => {
-          reply += `${index + 1}. ${newsItem}\n\n`;
+          reply += `${index + 1}. ${newsItem}\n`;
         });
-  
+    
         // Reply to the message
-        message.reply(reply)
-        .then(sentMessage => {
-          // Delete the bot's message after 10 seconds
-          setTimeout(() => {
-            sentMessage.delete(true);
-          }, 5*60*1000);
-        });;
-        console.log('NEWS:',reply)
+        await message.reply(reply);
+        console.log('BOT: '+ reply + '\n---------------------FIM---------------------\n')
       } catch (error) {
-        console.error('An error occurred:', error);
+        console.error('\n---------------------ERROR---------------------\nError accessing fetching news:', error + '\n---------------------ERROR---------------------');
+          message.reply('Eu não consegui acessar as noticias de hoje.')
       }
-    }
+    }    
   }
+///////////////////Ayub News Fut///////////////////
   if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
-    console.log('AYUB NEWS FUT')
+    console.log('\n---------------------AYUB NEWS FUT---------------------\n')
     const chat = await message.getChat();
     await chat.sendStateTyping();
     try {
@@ -321,25 +307,20 @@ client.on('message', async message => {
       // Prepare reply
       let reply = 'Aqui estão as notícias sobre futebol mais relevantes de hoje:\n\n';
       news.forEach((newsItem, index) => {
-        reply += `${index + 1}. ${newsItem.title}\n\n`;
+        reply += `${index + 1}. ${newsItem.title}\n`;
       });
   
       // Reply to the message
       message.reply(reply)
-      .then(sentMessage => {
-        // Delete the bot's message after 10 seconds
-        setTimeout(() => {
-          sentMessage.delete(true);
-        }, 5*60*1000);
-      });;
-      console('NEWS FUT:',reply)
+      console.log('\n',reply +'\n---------------------FIM---------------------\n')
     } catch (error) {
       console.error('An error occurred:', error);
     }
   }
+///////////////////////Ayub News Busca////////////////////////
   if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && !inputLower.includes('fut')) {
     const keywords = input.slice(2).join(' ');
-    console.log('AYUB NEWS',input[2])
+    console.log('---------------------AYUB NEWS BUSCA---------------------',input[2])
     const chat = await message.getChat();
     await chat.sendStateTyping();
   
@@ -383,15 +364,9 @@ client.on('message', async message => {
           reply += numberedTitle;
         });
         message.reply(reply)
-        .then(sentMessage => {
-          // Delete the bot's message after 10 seconds
-          setTimeout(() => {
-            sentMessage.delete(true);
-          }, 5*60*1000);
-        });;
-        console.log('NEWS:',reply)
+        console.log('\nNEWS:',reply + '\n---------------------FIM---------------------\n')
       } else {
-        message.reply(`Nenhum artigo encontrado para "${keywords}".`)
+        message.reply(`Nenhum artigo encontrado para "${keywords}".\n---------------------FIM---------------------\n`)
         .then(sentMessage => {
           // Delete the bot's message after 10 seconds
           setTimeout(() => {
@@ -411,44 +386,45 @@ client.on('message', async message => {
     }
   }
 
+///////////////////////////Link Ayub Resumo////////////////////////
   if (contactName.includes('Ayub') && links && links.length > 0) {
-    console.log('AYUB NEWS')
+    console.log('AYUB NEWS');
     const chat = await message.getChat();
     await chat.sendStateTyping();
     const link = links[0];
     console.log(link);
+    
+    if (link.includes('twitter.com')) {
+      console.log('Skipping Twitter link:', link);
+      return; // Skip summarization for Twitter links
+    }
+    
     try {
       const unshortenedLink = await unshortenLink(link);
       console.log(unshortenedLink);
       let pageContent = await getPageContent(unshortenedLink);
       console.log(pageContent);
-  
+    
       const prompt = `Faça um curto resumo desse texto:\n\n${pageContent}.`;
       console.log(prompt);
-  
+    
       const summary = await runCompletion(prompt);
       console.log(summary);
-  
+    
       message.reply(summary)
-      .then(sentMessage => {
-        // Delete the bot's message after 10 seconds
-        setTimeout(() => {
-          sentMessage.delete(true);
-        }, 5*60*1000);
-      });;
-      console.log('NEWS:',summary)
+      console.log('NEWS:', summary);
     } catch (error) {
       console.error('Error accessing link to generate summary:', error);
       message.reply('Eu não consegui acessar o link para fazer um resumo.')
-      .then(sentMessage => {
-        // Delete the bot's message after 10 seconds
-        setTimeout(() => {
-          sentMessage.delete(true);
-        }, 5*60*1000);
-      });;
+        .then(sentMessage => {
+          // Delete the bot's message after 10 seconds
+          setTimeout(() => {
+            sentMessage.delete(true);
+          }, 5 * 60 * 1000);
+        });
     }
-  }
-//////////////////////TAGS/////////////////////////////
+  } 
+//////////////////////////TAGS/////////////////////////////
   if (message.body.toLowerCase().includes('@all') && !message.hasQuotedMsg) {
     let chat = await message.getChat();
 
@@ -733,10 +709,14 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
           });
     }
   }
-///////Sticker////////
+//////////////////////STICKER//////////////////////////////////
   if (message.hasMedia && message.body.includes('#sticker')) {
     const attachmentData = await message.downloadMedia();
     message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
+  }
+  if (message.body.includes('debug')) {
+    const id1 = await message.getChat(id);
+    console.log(id1);
   }
 });
 /////////////////////FUNCTIONS/////////////////////////
@@ -745,31 +725,42 @@ async function scrapeNews() {
   const url = 'https://www.newsminimalist.com/';
   const response = await axios.get(url);
   const $ = cheerio.load(response.data);
-  const newsElements = $('.inline-flex.w-full.items-baseline.rounded.py-4');
-
+  const newsElements = $('article button.inline-flex.w-full.items-center.rounded.text-left.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
   const news = [];
   newsElements.each((index, element) => {
     if (index < 5) {
-      const newsText = $(element).find('div').text().trim();
+      const newsText = $(element).find('div > div > span').first().text().trim();
+      console.log('News text:', newsText);
       news.push(newsText);
     }
   });
-
+  console.log('News array:', news);
   return news;
+}
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 // Function to translate the news to Portuguese using translate-google
 async function translateToPortuguese(news) {
-  const translatedNews = await Promise.all(news.map(async (newsItem) => {
-    try {
-      const translation = await translate(newsItem, { to: 'pt' });
-      return translation;
-    } catch (error) {
-      console.error(`Translation failed for: ${newsItem}`, error);
-      return newsItem; // If translation fails, use the original text
-    }
-  }));
+  // Filter out empty news items
+  const nonEmptyNews = news.filter(item => item.trim() !== '');
+  // Concatenate all news items into one string, separated by newlines
+  const newsText = nonEmptyNews.join('\n');
 
-  return translatedNews;
+  // Prepare the prompt for translation
+  const prompt = `Translate the following English text to Portuguese (Brazil):\n\n${newsText}`;
+
+  try {
+    // Generate the completion
+    const completion = await runCompletion(prompt);
+
+    // Split the translated text back into individual news items
+    const translatedNews = completion.trim().split('\n');
+    return translatedNews;
+  } catch (error) {
+    console.error(`Translation failed for the news text`, error);
+    return news; // If translation fails, use the original text
+  }
 }
 // Function to scrape news from the website
 async function scrapeNews2() {
@@ -859,3 +850,25 @@ async function getPageContent(url) {
   await browser.close();
   return textContent;
 }
+
+client.on('message_reaction', async (reaction) => {
+  // Get the ID of the message that was reacted to
+  const reactedMsgId = reaction.msgId;
+
+  // Get the chat where the reaction occurred
+  const chat = await client.getChatById(reaction.msgId.remote);
+
+  // Fetch all messages from the chat
+  const messages = await chat.fetchMessages();
+
+  // Loop through all messages to find the reacted message
+  for (let message of messages) {
+      // Check if the message ID matches the reacted message ID
+      if (message.id._serialized === reactedMsgId._serialized) {
+          // If it matches, delete the message
+          await message.delete(true);
+          console.log('Deleted message: ' + message.body);
+          break;
+      }
+  }
+});
