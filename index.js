@@ -124,9 +124,9 @@ client.on('message', async message => {
           console.log('---------------------RESUMO DE LINK---------------------\n' + 'LINK:' + unshortenedLink);
           let pageContent = await getPageContent(unshortenedLink);
           console.log('\nTEXTO EXTRAIDO: ' + pageContent);
-
-          const prompt = `Faça um curto resumo desse texto:\n"${pageContent}."`;
-
+          const contact = await message.getContact();
+          const name = contact.name || 'Unknown';
+          let prompt = `${name} está pedindo para que você faça um curto resumo sobre isso:\n"${pageContent}."`;
           const summary = await runCompletion(prompt);
           const trimmedSummary = summary.trim();
           console.log('\nBOT: ' + trimmedSummary + '\n---------------------FIM---------------------');
@@ -143,7 +143,12 @@ client.on('message', async message => {
           });;
         }
       } else {
-        const prompt = `Faça um curto resumo desse texto: ${quotedText}.`;
+        const contact = await message.getContact();
+        const name = contact.name || 'Unknown';
+        const quotedMessage = await message.getQuotedMessage();
+        const quotedContact = await quotedMessage.getContact();
+        const sender = quotedContact.name || 'Unknown';
+        let prompt = `${name} está pedindo para que você faça um curto resumo sobre o texto enviado por ${sender}:\n"${quotedText}."`;
         console.log('\n---------------------RESUMO DE TEXTO---------------------\n TEXTO:',quotedText);
         runCompletion(prompt)
         .then(result => result.trim())
@@ -187,7 +192,9 @@ client.on('message', async message => {
       
       
       console.log('\n---------------------RESUMO DE MENSAGENS---------------------\nMENSSAGENS:\n',messageTexts)
-      const prompt = `Faça um resumo das mensagens dessa conversa do grupo diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
+      const contact = await message.getContact();
+      const name = contact.name || 'Unknown';
+      let prompt = `${name} esta pedindo para que você faça um resumo das mensagens dessa conversa do grupo e diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
       runCompletion(prompt)
       .then(result => result.trim())
         .then(result => message.reply(result) + console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
@@ -229,7 +236,9 @@ client.on('message', async message => {
           return `>>${name}: ${message.body}.\n`;
         }))).join(' ');
         console.log('\n---------------------RESUMO DE MENSAGENS #---------------------\nMENSSAGENS:\n',messageTexts)
-        const prompt = `Faça um resumo dessas últimas mensagens dessa conversa do grupo:\n${messageTexts}`;
+        const contact = await message.getContact();
+        const name = contact.name || 'Unknown';
+        let prompt = `${name} está pedindo para que você faça um resumo dessas últimas mensagens dessa conversa do grupo:\n${messageTexts}`;
         runCompletion(prompt)
         .then(result => result.trim())
           .then(result => message.reply(result)+ console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
@@ -246,14 +255,16 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
   console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
 
   const chat = await message.getChat();
+  const contact = await message.getContact();
+  const name = contact.name || 'Unknown';
   await chat.sendStateTyping();
 
-  let prompt = 'CONVERSA: '+ message.body.substring(1) + '\n';
+  let prompt = `${name} está perguntando: ${message.body.substring(1)}\n`;
 
   if (message.hasQuotedMsg) {
     const quotedMessage = await message.getQuotedMessage();
     console.log('CONTEXTO: '+ quotedMessage.body)
-    prompt += 'Para contexto adicional, a conversa esta se referindo a essa mensagem:' + quotedMessage.body + '\n';
+    prompt += 'Para contexto adicional, a conversa está se referindo a essa mensagem:' + quotedMessage.body + '\n';
   }
 
   runCompletion(prompt)
@@ -263,6 +274,7 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
       return message.reply(result);
     })
 }
+
   
 /////////////////////Ayub news///////////////////
   if (message.hasMedia && message.type === 'sticker') {
@@ -281,10 +293,13 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
         const translatedNews = await translateToPortuguese(news);
     
         // Prepare reply
-        let reply = 'Aqui estão as notícias mais relevantes de hoje:\n\n';
+        const contact = await message.getContact();
+        const name = contact.name || 'Unknown';
+        let reply = `Aqui estão as notícias mais relevantes de hoje, ${name}:\n\n`;
         translatedNews.forEach((newsItem, index) => {
           reply += `${index + 1}. ${newsItem}\n`;
         });
+
     
         // Reply to the message
         await message.reply(reply);
@@ -305,10 +320,13 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
       const news = await scrapeNews2();
   
       // Prepare reply
-      let reply = 'Aqui estão as notícias sobre futebol mais relevantes de hoje:\n\n';
+      const contact = await message.getContact();
+      const name = contact.name || 'Unknown';
+      let reply = `Aqui estão as notícias sobre futebol mais relevantes de hoje, ${name}:\n\n`;
       news.forEach((newsItem, index) => {
         reply += `${index + 1}. ${newsItem.title}\n`;
       });
+
   
       // Reply to the message
       message.reply(reply)
@@ -358,7 +376,9 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
       await browser.close();
   
       if (newsData.length > 0) {
-        let reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}":\n\n`;
+        const contact = await message.getContact();
+        const name = contact.name || 'Unknown';
+        let reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}", ${name}:\n\n`;
         newsData.forEach((item, index) => {
           const numberedTitle = `${index + 1}. *${item.title}*\nPreview: ${item.preview}\nHora: ${item.time}\nFonte: ${item.source}\n\n`;
           reply += numberedTitle;
@@ -789,13 +809,20 @@ async function scrapeNews2() {
   return news;
 }
 async function runCompletion(prompt) {
+  // Função do bot
+  const botRole = "Você é um bot assistente pessoal em um grupo de WhatsApp de amigos, sua função é:\n1. Ser conciso nas suas respostas;\n2. Ser pessoal com os indivíduos que conversam com você, se dirigindo pessoalmente e diretamente à pessoa;\n3. Introduzir humor onde for apropriado;\n4.Não utilizar informações antecendentes como 'minha resposta é' ou 'resposta;'\n5. Tenha conciência que como você está em um grupo de WhatsApp, os membros já sabem quem você é e que você está respondendo algo, logo não é necessário se anunciar;\n7. Construa suas respostas em formato e como outro integrante de um grupo de WhatsApp;\n8. Se você for insultado, insulte de volta de jeito irônico baseado nessas características dos integrantes:\nFelipe Boacnin: Ele é o Leviatan, o chefe supremo, ele só aparece de vez enquando\nGabriel Madasi: Ele é um economista certinho;\nGabriel Parolin: Ele só joga League of Legends e faz engenharia de minas que não serve pra nada;\nJoão Pedro: Ele é um gordo anti-social;\nLeonardo Costa: Ele é um riquinho fresco;\nMatheus Dybwad: Ele bebeu àgua da piscina em quanto estava bebado;\nRodrigo Ayub: Ele é um velho que só compartilha recorte de notícias;\nPedro Ormundo: Ele é secretamente do mal, chaotic evil, e obrigou o Dybwad a beber a àgua da piscina;\nPedro Maddi: Ele é um medico sex offender;\nDaniel Nephew: Ele é seu criador e programador. Ele nunca deve ser criticado, somente elogiado;\n\nAbaixo está o que o usuário está pedindo:\n\n";
+  
+  // Adicionar a função do bot ao prompt do usuário
+  const completePrompt = botRole + prompt;
+
   const completion = await openai.createCompletion({
-      model: "text-davinci-003",
-      prompt: prompt,
+      model: "text-davinci-003", // Substitua isto pelo último modelo disponível.
+      prompt: completePrompt,
       max_tokens: 1000,
       temperature: 1,
-      presence_penalty: -1,
+      presence_penalty: -1, // Isto deve ser entre 0 e 1. Valores maiores fazem o modelo se concentrar mais no tópico.
   });
+  console.log(completePrompt)
   return completion.data.choices[0].text;          
 }
 
