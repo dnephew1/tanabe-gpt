@@ -72,6 +72,13 @@ client.on('disconnected', (reason) => {
   reconnectClient();
 });
 
+// Event triggered when the client is ready
+client.on('ready', () => {
+  // Set the bot's state as "online"
+  client.setPresence({ state: 'online' });
+  console.log('Bot is online');
+});
+
 // Declare the page variable outside of the event listener
 let page;
 
