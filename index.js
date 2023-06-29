@@ -279,7 +279,7 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
   .then(result => {
     console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
     let colonIndex = result.indexOf(':');
-    let cleanedResult = colonIndex !== -1 ? result.slice(colonIndex + 1).trim() : result;
+    let cleanedResult = colonIndex !== -1 && colonIndex <= 25 ? result.slice(colonIndex + 1).trim() : result;
     return message.reply(cleanedResult);
   })
 }
