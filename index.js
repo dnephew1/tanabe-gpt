@@ -268,12 +268,13 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
   }
 
   runCompletion(prompt)
-    .then(result => result.trim())
-    .then(result => {
-      console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
-      let cleanedResult = result.startsWith('Resposta: ') ? result.replace('Resposta: ', '') : result;
-      return message.reply(cleanedResult);
-    })
+  .then(result => result.trim())
+  .then(result => {
+    console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
+    let colonIndex = result.indexOf(':');
+    let cleanedResult = colonIndex !== -1 ? result.slice(colonIndex + 1).trim() : result;
+    return message.reply(cleanedResult);
+  })
 }
 
   
