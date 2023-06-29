@@ -73,9 +73,9 @@ client.on('disconnected', (reason) => {
 });
 
 // Event triggered when the client is ready
-client.on('ready', () => {
+client.on('ready', async () => {
   // Set the bot's state as "online"
-  client.setPresence({ state: 'online' });
+  await client.sendPresenceAvailable();
   console.log('Bot is online');
 });
 
