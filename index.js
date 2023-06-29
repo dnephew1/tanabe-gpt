@@ -76,7 +76,6 @@ client.on('disconnected', (reason) => {
 client.on('ready', async () => {
   // Set the bot's state as "online"
   await client.sendPresenceAvailable();
-  console.log('Bot is online');
 });
 
 // Declare the page variable outside of the event listener
