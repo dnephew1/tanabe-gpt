@@ -3,7 +3,7 @@
 const { Client , LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs');
 const qrcode = require('qrcode-terminal');
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require("openai");
 require('dotenv').config();
 const puppeteer = require('puppeteer');
 const crypto = require('crypto');
@@ -34,10 +34,9 @@ const client = new Client({
 });
 
 // Create a new OpenAI API client
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY // This is also the default, can be omitted
 });
-const openai = new OpenAIApi(configuration);
 
 // Show QR code for authentication
 client.on('qr', qr => {
@@ -823,7 +822,7 @@ async function runCompletion(prompt) {
   // Adicionar a função do bot ao prompt do usuário
   const completePrompt = botRole + prompt;
 
-  const completion = await openai.createCompletion({
+  const completion = await openai.completions.create({
       model: "text-davinci-003", // Substitua isto pelo último modelo disponível.
       prompt: completePrompt,
       max_tokens: 1000,
@@ -831,7 +830,7 @@ async function runCompletion(prompt) {
       presence_penalty: -1, // Isto deve ser entre 0 e 1. Valores maiores fazem o modelo se concentrar mais no tópico.
   });
   console.log(completePrompt)
-  return completion.data.choices[0].text;          
+  return completion.choices[0].text;          
 }
 
 // Helper function to extract the link from a message text
