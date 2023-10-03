@@ -421,7 +421,7 @@ if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
     const link = links[0];
     console.log(link);
     
-    if (link.includes('twitter.com')) {
+    if (link.includes('x.com')) {
       console.log('Skipping Twitter link:', link);
       return; // Skip summarization for Twitter links
     }
@@ -752,11 +752,13 @@ async function scrapeNews() {
   const url = 'https://www.newsminimalist.com/';
   const response = await axios.get(url);
   const $ = cheerio.load(response.data);
-  const newsElements = $('article button.inline-flex.w-full.items-center.rounded.text-left.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
+  const newsElements = $('article div.cursor-pointer.list-none.rounded.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
   const news = [];
   newsElements.each((index, element) => {
     if (index < 5) {
-      const newsText = $(element).find('div > div > span').first().text().trim();
+      const rawNewsText = $(element).find('div > div > span:nth-child(1)').text().trim();
+      const startIndex = rawNewsText.indexOf(']') + 1;
+      const newsText = rawNewsText.substring(startIndex).trim();
       console.log('News text:', newsText);
       news.push(newsText);
     }
@@ -868,7 +870,7 @@ async function unshortenLink(link) {
 
 // Helper function to retrieve the content of a web page
 async function getPageContent(url) {
-  const browser = await puppeteer.launch({ args: ['--no-sandbox','--disable-setuid-sandbox'] });
+  const browser = await puppeteer.launch({headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox','--headless=new'] });
   const page = await browser.newPage();
   await page.goto(url);
 
