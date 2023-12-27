@@ -824,15 +824,13 @@ async function runCompletion(prompt) {
   // Adicionar a função do bot ao prompt do usuário
   const completePrompt = botRole + prompt;
 
-  const completion = await openai.completions.create({
-      model: "text-davinci-003", // Substitua isto pelo último modelo disponível.
-      prompt: completePrompt,
-      max_tokens: 1000,
-      temperature: 1,
-      presence_penalty: -1, // Isto deve ser entre 0 e 1. Valores maiores fazem o modelo se concentrar mais no tópico.
-  });
+  const completion = await openai.chat.completions.create({
+    messages: [{"role": "system", "content": "You are an whatsapp group assistant."},
+    {"role": "user", "content": completePrompt}],
+    model: "gpt-4",
+    });
   console.log(completePrompt)
-  return completion.choices[0].text;          
+  return completion.choices[0].message.content;
 }
 
 // Helper function to extract the link from a message text
