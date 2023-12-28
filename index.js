@@ -739,14 +739,14 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
   }
 //////////////////////STICKER//////////////////////////////////
   if (message.hasMedia && message.body.includes('#sticker')) {
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
     const attachmentData = await message.downloadMedia();
     message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
   }
-  if (message.body.includes('debug')) {
-    const id1 = await message.getChat(id);
-    console.log(id1);
-  }
   if (message.body.startsWith('#sticker')) {
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
     const query = message.body.slice(9).trim(); // Remove "#sticker" from the query
     // Check if there's a non-empty and non-whitespace query after "#sticker"
     if (query && /\S/.test(query)) {
@@ -999,8 +999,8 @@ client.on('message_reaction', async (reaction) => {
 });
 
 async function searchGoogleForImage(query) {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
+  const browser = await puppeteer.launch({headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox','--headless=new'] });
+  const page = await browser.newPage();
 
     try {
         const formattedQuery = query.split(' ').join('+') + '+meme';
