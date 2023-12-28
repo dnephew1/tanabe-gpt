@@ -94,224 +94,199 @@ client.on('message', async message => {
   const ayubnews = '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994';
 
   if (message.hasMedia && message.type === 'sticker') {
-    const stickerData = await message.downloadMedia();
+    try {
+        const stickerData = await message.downloadMedia();
+        const saveDirectory = __dirname + '/stickers'; // Replace with the desired save directory
+        const stickerFileName = `${message.id}.webp`; // Use a unique name for each sticker
+        const savePath = `${saveDirectory}/${stickerFileName}`;
+        fs.writeFileSync(savePath, stickerData.data);
 
-    // Save the sticker image file
-    const saveDirectory = __dirname + '/stickers'; // Replace with the desired save directory
-    const stickerFileName = `${message.id}.webp`; // Use a unique name for each sticker
-    const savePath = `${saveDirectory}/${stickerFileName}`;
-
-    fs.writeFileSync(savePath, stickerData.data);
-
-    // Calculate the SHA-256 hash of the saved sticker image
-    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-  }
-
-  if (message.hasQuotedMsg && message.hasMedia && message.type === 'sticker') {
-    const stickerData = await message.downloadMedia();
-    // Calculate the SHA-256 hash of the sticker image
-    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-    if (hash === expectedHash) {
-      const chat = await message.getChat();
-      await chat.sendStateTyping();
-      const quotedMessage = await message.getQuotedMessage();
-      const quotedText = quotedMessage.body;
-
-      // Check for links in the quoted message
-      const messageBody = quotedMessage.body;
-      const linkRegex = /(https?:\/\/[^\s]+)/g;
-      const links = messageBody.match(linkRegex);
-
-      // If links are found, stop execution
-      if (links && links.length > 0) {
-        const link = links[0];
-        try {
-          const unshortenedLink = await unshortenLink(link);
-          console.log('---------------------RESUMO DE LINK---------------------\n' + 'LINK:' + unshortenedLink);
-          let pageContent = await getPageContent(unshortenedLink);
-          console.log('\nTEXTO EXTRAIDO: ' + pageContent);
-          const contact = await message.getContact();
-          const name = contact.name || 'Unknown';
-          let prompt = `${name} está pedindo para que você faça um curto resumo sobre isso:\n"${pageContent}."`;
-          const summary = await runCompletion(prompt);
-          const trimmedSummary = summary.trim();
-          console.log('\nBOT: ' + trimmedSummary + '\n---------------------FIM---------------------');
-
-          message.reply(trimmedSummary)
-        } catch (error) {
-          console.error('\n---------------------ERROR---------------------\nError accessing link to generate summary:', error + '\n---------------------ERROR---------------------');
-          message.reply('Eu não consegui acessar o link para fazer um resumo.')
-        }
-      } else {
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        const quotedMessage = await message.getQuotedMessage();
-        const quotedContact = await quotedMessage.getContact();
-        const sender = quotedContact.name || 'Unknown';
-        let prompt = `${name} está pedindo para que você faça um curto resumo sobre o texto enviado por ${sender}:\n"${quotedText}."`;
-        console.log('\n---------------------RESUMO DE TEXTO---------------------\n TEXTO:',quotedText);
-        runCompletion(prompt)
-        .then(result => result.trim())
-          .then(result => {
-              // Here, we changed message.reply(result) to quotedMessage.reply(result)
-              quotedMessage.reply(result)
-                  .then(sentMessage => {
-                      // The setTimeout function and sentMessage.delete(true) have been removed
-                  });
-              console.log('BOT: ', result +'---------------------FIM---------------------');
-        });
+        const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    } catch (error) {
+        console.error('An error occurred while handling the sticker:', error);
+        // Handle the error or log it
     }
-      return;
-    }
-  }
-
-/////////////////////Summarize 1hr////////////////
-    if (message.hasMedia && message.type === 'sticker' && (!links || links.length === 0)) {
-      const stickerData = await message.downloadMedia();
-  
-      // Calculate the SHA-256 hash of the sticker image
-      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-  
-      if (hash === expectedHash) {
-      const chat = await message.getChat();
-      await chat.sendStateTyping();
-      const messages = await chat.fetchMessages({ limit: 500 });
-      const lastMessage = messages[messages.length - 2];
-      const lastMessageTimestamp = lastMessage.timestamp;
-      const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
-      const messagesSinceLastHour = messages.slice(0, -1).filter(message => (
-        message.timestamp > oneHourBeforeLastMessageTimestamp &&
-        message.fromMe === false &&
-        message.body.trim() !== ''
-      ));
-      const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        return `>>${name}: ${message.body}.\n`;
-      }))).join(' ');
-      
-      
-      console.log('\n---------------------RESUMO DE MENSAGENS---------------------\nMENSSAGENS:\n',messageTexts)
-      const contact = await message.getContact();
-      const name = contact.name || 'Unknown';
-      let prompt = `${name} esta pedindo para que você faça um resumo das mensagens dessa conversa do grupo e diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
-      runCompletion(prompt)
-      .then(result => result.trim())
-        .then(result => message.reply(result) + console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
-          .then(sentMessage => {
-            // Delete the bot's message after 10 seconds
-            setTimeout(() => {
-              sentMessage.delete(true);
-            }, 5*60*1000);
-          });;
-    }  
-/////////////////////Summarize X messages/////////////////
-    const limit = parseInt(input[2]);
-    } else if (inputLower[0] === 'resumo' && inputLower[1] === 'pf') { 
-      const limit = parseInt(input[2]);
-      if (isNaN(limit)) {
-        const chat = await message.getChat();
-        await chat.sendStateTyping();
-        message.reply('Por favor, forneça um número válido após "Resumo pf" para definir o limite de mensagens.')
-        .then(sentMessage => {
-          // Delete the bot's message after 10 seconds
-          setTimeout(() => {
-            sentMessage.delete(true);
-          }, 5*60*1000);
-        });;
-        return;
-      }
-      if (input.length >= 2 && input.length <= 501) {
-        const chat = await message.getChat();
-        await chat.sendStateTyping();
-        const messages = await chat.fetchMessages({ limit: limit });
-        const messageswithoutme = messages.slice(0, -1).filter(message => (
-          message.fromMe === false &&
-          message.body.trim() !== ''
-        ));
-        const messageTexts = (await Promise.all(messageswithoutme.map(async message => {
-          const contact = await message.getContact();
-          const name = contact.name || 'Unknown';
-          
-          return `>>${name}: ${message.body}.\n`;
-        }))).join(' ');
-        console.log('\n---------------------RESUMO DE MENSAGENS #---------------------\nMENSSAGENS:\n',messageTexts)
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        let prompt = `${name} está pedindo para que você faça um resumo dessas últimas mensagens dessa conversa do grupo:\n${messageTexts}`;
-        runCompletion(prompt)
-        .then(result => result.trim())
-          .then(result => message.reply(result)+ console.log('\nBOT: '+ result + '\n---------------------FIM---------------------\n'))
-            .then(sentMessage => {
-              // Delete the bot's message after 5mins
-              setTimeout(() => {
-                sentMessage.delete(true);
-              }, 5*60*1000);
-          });;
-      }
-  }
-///////////////////////Respond to #////////////////
-if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
-  console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
-
-  const chat = await message.getChat();
-  const contact = await message.getContact();
-  const name = contact.name || 'Unknown';
-  await chat.sendStateTyping();
-
-  let prompt = `${name} está perguntando: ${message.body.substring(1)}\n`;
-
-  if (message.hasQuotedMsg) {
-    const quotedMessage = await message.getQuotedMessage();
-    console.log('CONTEXTO: '+ quotedMessage.body)
-    prompt += 'Para contexto adicional, a conversa está se referindo a essa mensagem:' + quotedMessage.body + '\n';
-  }
-
-  runCompletion(prompt)
-  .then(result => result.trim())
-  .then(result => {
-    console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
-    let colonIndex = result.indexOf(':');
-    let cleanedResult = colonIndex !== -1 && colonIndex <= 25 ? result.slice(colonIndex + 1).trim() : result;
-    return message.reply(cleanedResult);
-  })
 }
 
+if (message.hasQuotedMsg && message.hasMedia && message.type === 'sticker') {
+    try {
+        const stickerData = await message.downloadMedia();
+        const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+        
+        if (hash === expectedHash) {
+            const chat = await message.getChat();
+            await chat.sendStateTyping();
+            const quotedMessage = await message.getQuotedMessage();
+            const quotedText = quotedMessage.body;
+
+            const messageBody = quotedMessage.body;
+            const linkRegex = /(https?:\/\/[^\s]+)/g;
+            const links = messageBody.match(linkRegex);
+
+            if (links && links.length > 0) {
+                const link = links[0];
+                try {
+                    const unshortenedLink = await unshortenLink(link);
+                    console.log('---------------------RESUMO DE LINK---------------------\n' + 'LINK:' + unshortenedLink);
+                    let pageContent = await getPageContent(unshortenedLink);
+                    console.log('\nTEXTO EXTRAIDO: ' + pageContent);
+                    const contact = await message.getContact();
+                    const name = contact.name || 'Unknown';
+                    let prompt = `${name} está pedindo para que você faça um curto resumo sobre isso:\n"${pageContent}."`;
+                    const summary = await runCompletion(prompt);
+                    const trimmedSummary = summary.trim();
+                    console.log('\nBOT: ' + trimmedSummary + '\n---------------------FIM---------------------');
+
+                    message.reply(trimmedSummary);
+                } catch (error) {
+                    console.error('\n---------------------ERROR---------------------\nError accessing link to generate summary:', error + '\n---------------------ERROR---------------------');
+                    message.reply('Eu não consegui acessar o link para fazer um resumo.');
+                }
+            } else {
+                const contact = await message.getContact();
+                const name = contact.name || 'Unknown';
+                const quotedMessage = await message.getQuotedMessage();
+                const quotedContact = await quotedMessage.getContact();
+                const sender = quotedContact.name || 'Unknown';
+                let prompt = `${name} está pedindo para que você faça um curto resumo sobre o texto enviado por ${sender}:\n"${quotedText}."`;
+                console.log('\n---------------------RESUMO DE TEXTO---------------------\n TEXTO:',quotedText);
+                runCompletion(prompt)
+                .then(result => result.trim())
+                .then(result => {
+                    quotedMessage.reply(result);
+                    console.log('BOT: ', result +'---------------------FIM---------------------');
+                });
+            }
+        }
+    } catch (error) {
+        console.error('An error occurred while handling the quoted sticker:', error);
+        // Handle the error or log it
+    }
+}
+
+/////////////////////Summarize 1hr////////////////
+if (message.hasMedia && message.type === 'sticker' && (!links || links.length === 0)) {
+  try {
+      const stickerData = await message.downloadMedia();
+      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+      
+      if (hash === expectedHash) {
+          const chat = await message.getChat();
+          await chat.sendStateTyping();
+          const messages = await chat.fetchMessages({ limit: 500 });
+          const lastMessage = messages[messages.length - 2];
+          const lastMessageTimestamp = lastMessage.timestamp;
+          const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
+          const messagesSinceLastHour = messages.slice(0, -1).filter(message => (
+              message.timestamp > oneHourBeforeLastMessageTimestamp &&
+              message.fromMe === false &&
+              message.body.trim() !== ''
+          ));
+          
+          const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
+              const contact = await message.getContact();
+              const name = contact.name || 'Unknown';
+              return `>>${name}: ${message.body}.\n`;
+          }))).join(' ');
+          
+          console.log('\n---------------------RESUMO DE MENSAGENS---------------------\nMENSSAGENS:\n', messageTexts);
+          const contact = await message.getContact();
+          const name = contact.name || 'Unknown';
+          let prompt = `${name} está pedindo para que você faça um resumo das mensagens dessa conversa do grupo e diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n${messageTexts}`;
+          
+          runCompletion(prompt)
+              .then(result => result.trim())
+              .then(result => {
+                  message.reply(result)
+                      .then(sentMessage => {
+                          // Delete the bot's message after 10 seconds
+                          setTimeout(() => {
+                              sentMessage.delete(true);
+                          }, 5 * 60 * 1000);
+                      });
+                  console.log('\nBOT: ' + result + '\n---------------------FIM---------------------\n');
+              });
+      }
+  } catch (error) {
+      console.error('An error occurred while handling the sticker:', error);
+      // Handle the error or log it
+  }
+}
+
+///////////////////////Respond to #////////////////
+if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
+  try {
+      console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
+      
+      const chat = await message.getChat();
+      const contact = await message.getContact();
+      const name = contact.name || 'Unknown';
+      await chat.sendStateTyping();
+
+      let prompt = `${name} está perguntando: ${message.body.substring(1)}\n`;
+
+      if (message.hasQuotedMsg) {
+          const quotedMessage = await message.getQuotedMessage();
+          console.log('CONTEXTO: ' + quotedMessage.body)
+          prompt += 'Para contexto adicional, a conversa está se referindo a essa mensagem:' + quotedMessage.body + '\n';
+      }
+
+      runCompletion(prompt)
+          .then(result => result.trim())
+          .then(result => {
+              console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
+              let colonIndex = result.indexOf(':');
+              let cleanedResult = colonIndex !== -1 && colonIndex <= 25 ? result.slice(colonIndex + 1).trim() : result;
+              return message.reply(cleanedResult);
+          })
+          .catch(error => {
+              console.error('An error occurred while processing the question:', error);
+              // Handle the error or log it
+          });
+  } catch (error) {
+      console.error('An error occurred while handling the question:', error);
+      // Handle the error or log it
+  }
+}
   
 /////////////////////Ayub news///////////////////
-  if (message.hasMedia && message.type === 'sticker') {
-    const stickerData = await message.downloadMedia();
-    // Calculate the SHA-256 hash of the sticker image
-    const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-    // Compare sticker hash with the specified SHA hash
-    if (message.hasMedia && message.type === 'sticker' && hash === '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994') {
-      console.log('\n---------------------AYUB NEWS DE HOJE---------------------\n');
-      const chat = await message.getChat();
-      await chat.sendStateTyping();
-      try {
-        // Scrape news
-        const news = await scrapeNews();
-        // Translate news to Portuguese using translate-google
-        const translatedNews = await translateToPortuguese(news);
-    
-        // Prepare reply
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        let reply = `Aqui estão as notícias mais relevantes de hoje, ${name}:\n\n`;
-        translatedNews.forEach((newsItem, index) => {
-          reply += `${index + 1}. ${newsItem}\n`;
-        });
+if (message.hasMedia && message.type === 'sticker') {
+  const stickerData = await message.downloadMedia();
+  // Calculate the SHA-256 hash of the sticker image
+  const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
 
-    
-        // Reply to the message
-        await message.reply(reply);
-        console.log('BOT: '+ reply + '\n---------------------FIM---------------------\n')
-      } catch (error) {
-        console.error('\n---------------------ERROR---------------------\nError accessing fetching news:', error + '\n---------------------ERROR---------------------');
-          message.reply('Eu não consegui acessar as noticias de hoje.')
-      }
-    }    
+  // Compare sticker hash with the specified SHA hash
+  if (hash === '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994') {
+    console.log('\n---------------------AYUB NEWS DE HOJE---------------------\n');
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+
+    try {
+      // Scrape news
+      const news = await scrapeNews();
+
+      // Translate news to Portuguese using translate-google
+      const translatedNews = await translateToPortuguese(news);
+
+      // Prepare reply
+      const contact = await message.getContact();
+      const name = contact.name || 'Unknown';
+      let reply = `Aqui estão as notícias mais relevantes de hoje, ${name}:\n\n`;
+      
+      translatedNews.forEach((newsItem, index) => {
+        reply += `${index + 1}. ${newsItem}\n`;
+      });
+
+      // Reply to the message
+      await message.reply(reply);
+      console.log('BOT: ' + reply + '\n---------------------FIM---------------------\n');
+    } catch (error) {
+      console.error('\n---------------------ERROR---------------------\nError fetching news:', error + '\n---------------------ERROR---------------------');
+      message.reply('Desculpe, não consegui acessar as notícias de hoje.');
+    }
   }
+}
+
 ///////////////////Ayub News Fut///////////////////
   if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
     console.log('\n---------------------AYUB NEWS FUT---------------------\n')
