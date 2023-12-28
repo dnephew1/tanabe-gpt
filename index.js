@@ -739,7 +739,6 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
   }
 //////////////////////STICKER//////////////////////////////////
   if (message.hasMedia && message.body.includes('#sticker')) {
-    await chat.sendStateTyping();
     const attachmentData = await message.downloadMedia();
     message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
   }
@@ -748,7 +747,6 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     console.log(id1);
   }
   if (message.body.startsWith('#sticker')) {
-    await chat.sendStateTyping();
     const query = message.body.slice(9).trim(); // Remove "#sticker" from the query
     // Check if there's a non-empty and non-whitespace query after "#sticker"
     if (query && /\S/.test(query)) {
