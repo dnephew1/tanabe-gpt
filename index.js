@@ -141,12 +141,6 @@ client.on('message', async message => {
         } catch (error) {
           console.error('\n---------------------ERROR---------------------\nError accessing link to generate summary:', error + '\n---------------------ERROR---------------------');
           message.reply('Eu não consegui acessar o link para fazer um resumo.')
-          .then(sentMessage => {
-            // Delete the bot's message after 10 seconds
-            setTimeout(() => {
-              sentMessage.delete(true);
-            }, 5*60*1000);
-          });;
         }
       } else {
         const contact = await message.getContact();
