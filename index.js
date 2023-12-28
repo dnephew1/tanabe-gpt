@@ -82,6 +82,7 @@ let page;
 
 ///////////////////SCRIPT/////////////////////////
 client.on('message', async message => {
+  try {
   const messageBody = message.body;
   const linkRegex = /(https?:\/\/[^\s]+)/g;
   const links = messageBody.match(linkRegex);
@@ -738,6 +739,7 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
   }
 //////////////////////STICKER//////////////////////////////////
   if (message.hasMedia && message.body.includes('#sticker')) {
+    await chat.sendStateTyping();
     const attachmentData = await message.downloadMedia();
     message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
   }
@@ -746,9 +748,10 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     console.log(id1);
   }
   if (message.body.startsWith('#sticker')) {
+    await chat.sendStateTyping();
     const query = message.body.slice(9).trim(); // Remove "#sticker" from the query
-
-    if (query) {
+    // Check if there's a non-empty and non-whitespace query after "#sticker"
+    if (query && /\S/.test(query)) {
         try {
             // Call the search function and get the image URL
             const imageUrl = await searchGoogleForImage(query);
@@ -781,31 +784,48 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
         message.reply('Please provide a keyword after #sticker.');
     }
 }
+} catch (error) {
+  console.error('An error occurred while processing a message:', error);
+  // Handle the error or log it, but don't stop the client
+}
 });
 
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
 async function scrapeNews() {
-  const url = 'https://www.newsminimalist.com/';
-  const response = await axios.get(url);
-  const $ = cheerio.load(response.data);
-  const newsElements = $('article div.cursor-pointer.list-none.rounded.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
-  const news = [];
-  newsElements.each((index, element) => {
-    if (index < 5) {
-      const rawNewsText = $(element).find('div > div > span:nth-child(1)').text().trim();
-      const startIndex = rawNewsText.indexOf(']') + 1;
-      const newsText = rawNewsText.substring(startIndex).trim();
-      console.log('News text:', newsText);
-      news.push(newsText);
-    }
-  });
-  console.log('News array:', news);
-  return news;
+  try {
+      const url = 'https://www.newsminimalist.com/';
+      const response = await axios.get(url);
+      const $ = cheerio.load(response.data);
+      const newsElements = $('article div.cursor-pointer.list-none.rounded.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
+      const news = [];
+      newsElements.each((index, element) => {
+          if (index < 5) {
+              const rawNewsText = $(element).find('div > div > span:nth-child(1)').text().trim();
+              const startIndex = rawNewsText.indexOf(']') + 1;
+              const newsText = rawNewsText.substring(startIndex).trim();
+              console.log('News text:', newsText);
+              news.push(newsText);
+          }
+      });
+      console.log('News array:', news);
+      return news;
+  } catch (error) {
+      console.error('An error occurred while scraping news:', error);
+      // Handle the error or log it, and return an empty array
+      return [];
+  }
 }
+
 function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  try {
+      return new Promise(resolve => setTimeout(resolve, ms));
+  } catch (error) {
+      console.error('An error occurred in the delay function:', error);
+      // Handle the error or log it
+  }
 }
+
 // Function to translate the news to Portuguese using translate-google
 async function translateToPortuguese(news) {
   // Filter out empty news items
@@ -830,135 +850,156 @@ async function translateToPortuguese(news) {
 }
 // Function to scrape news from the website
 async function scrapeNews2() {
-  const url = 'https://ge.globo.com/futebol/';
-  const response = await axios.get(url);
-  const $ = cheerio.load(response.data);
-  const newsElements = $('.feed-post-body');
+  try {
+      const url = 'https://ge.globo.com/futebol/';
+      const response = await axios.get(url);
+      const $ = cheerio.load(response.data);
+      const newsElements = $('.feed-post-body');
 
-  const news = [];
-  newsElements.each((index, element) => {
-    if (index < 5) {
-      const title = $(element).find('.feed-post-body-title a').text().trim();
-      const summary = $(element).find('.feed-post-body-resumo').text().trim();
-      const link = $(element).find('.feed-post-body-title a').attr('href');
+      const news = [];
+      newsElements.each((index, element) => {
+          if (index < 5) {
+              const title = $(element).find('.feed-post-body-title a').text().trim();
+              const summary = $(element).find('.feed-post-body-resumo').text().trim();
+              const link = $(element).find('.feed-post-body-title a').attr('href');
 
-      const newsItem = {
-        title,
-        summary,
-        link,
-      };
+              const newsItem = {
+                  title,
+                  summary,
+                  link,
+              };
 
-      news.push(newsItem);
-    }
-  });
+              news.push(newsItem);
+          }
+      });
 
-  return news;
-}
-async function runCompletion(prompt) {
-  // Função do bot
-  const botRole = "Você é um bot assistente pessoal em um grupo de WhatsApp de amigos, sua função é:\n1. Ser conciso nas suas respostas;\n2. Ser pessoal com os indivíduos que conversam com você, se dirigindo pessoalmente e diretamente à pessoa;\n3. Introduzir humor onde for apropriado;\n4.Não utilizar informações antecendentes como 'minha resposta é' ou 'resposta;'\n5. Tenha conciência que como você está em um grupo de WhatsApp, os membros já sabem quem você é e que você está respondendo algo, logo não é necessário se anunciar;\n7. Construa suas respostas em formato e como outro integrante de um grupo de WhatsApp;\n8. Se você for insultado, insulte de volta de jeito irônico baseado nessas características dos integrantes:\nFelipe \"Leviathan\" Boacnin: Ele é o Leviatan, o chefe supremo, ele só aparece de vez enquando\nGabriel \"Farialimer\" Madasi: Ele é um economista certinho;\nGabriel \"Raichavasca\" Parolin: Ele só joga League of Legends e faz engenharia de minas que não serve pra nada;\nJoão \"Batata\" Pedro: Ele é um gordo anti-social;\nLeonardo \"Fortemente Lésbico\" Costa: Ele é um riquinho fresco;\nMatheus \"Água de Piscina\" Dybwad: Ele bebeu àgua da piscina em quanto estava bebado;\nRodrigo \"News\" Ayub: Ele é um velho que só compartilha recorte de notícias;\nPedro \"Chaotic Evil\" Ormundo: Ele é secretamente do mal, chaotic evil, e obrigou o Dybwad a beber a àgua da piscina;\nPedro \"Pedoatra\" Maddi: Ele é um medico sex offender;\nDaniel \"Daddy\" Tanabe Nephew: Ele é seu criador e programador. Ele nunca deve ser criticado, somente elogiado;\n\nAbaixo está o que o usuário está pedindo:\n\n";
-  
-  // Adicionar a função do bot ao prompt do usuário
-  const completePrompt = botRole + prompt;
-
-  const completion = await openai.chat.completions.create({
-    messages: [{"role": "system", "content": "You are an whatsapp group assistant."},
-    {"role": "user", "content": completePrompt}],
-    model: "gpt-4",
-    });
-  console.log(completePrompt)
-  return completion.choices[0].message.content;
+      return news;
+  } catch (error) {
+      console.error('An error occurred in the scrapeNews2 function:', error);
+      // Handle the error or log it
+      return []; // Return an empty array or other appropriate value in case of an error
+  }
 }
 
 async function runCompletion(prompt) {
-  // Função do bot
-  const botRole = "Você é um bot assistente pessoal em um grupo de WhatsApp de amigos, sua função é:\n1. Ser conciso nas suas respostas;\n2. Ser pessoal com os indivíduos que conversam com você, se dirigindo pessoalmente e diretamente à pessoa;\n3. Seja formal e eloquente. A nao ser que a pergunta do usuario comece com '!'.\n4.Não utilizar informações antecendentes como 'minha resposta é' ou 'resposta;'\n5. Tenha conciência que como você está em um grupo de WhatsApp, os membros já sabem quem você é e que você está respondendo algo, logo não é necessário se anunciar;\n7. Construa suas respostas em formato e como outro integrante de um grupo de WhatsApp;\n8. Se você for insultado, insulte de volta de jeito irônico baseado nessas características dos integrantes:\nFelipe \"Leviathan\" Boacnin: Ele é o Leviatan, o chefe supremo, ele só aparece de vez enquando\nGabriel \"Farialimer\" Madasi: Ele é um economista certinho;\nGabriel \"Raichavasca\" Parolin: Ele só joga League of Legends e faz engenharia de minas que não serve pra nada;\nJoão \"Batata\" Pedro: Ele é um gordo anti-social;\nLeonardo \"Fortemente Lésbico\" Costa: Ele é um riquinho fresco;\nMatheus \"Água de Piscina\" Dybwad: Ele bebeu àgua da piscina em quanto estava bebado;\nRodrigo \"News\" Ayub: Ele é um velho que só compartilha recorte de notícias;\nPedro \"Chaotic Evil\" Ormundo: Ele é secretamente do mal, chaotic evil, e obrigou o Dybwad a beber a àgua da piscina;\nPedro \"Pedoatra\" Maddi: Ele é um medico sex offender;\nDaniel \"Daddy\" Tanabe Nephew: Ele é seu criador e programador. Ele nunca deve ser criticado, somente elogiado;\n\nAbaixo está o que o usuário está pedindo:\n\n";
-  
-  // Adicionar a função do bot ao prompt do usuário
-  const completePrompt = botRole + prompt;
+  try {
+      // Função do bot
+      const botRole = "Você é um bot assistente pessoal em um grupo de WhatsApp de amigos, sua função é:\n1. Ser conciso nas suas respostas;\n2. Ser pessoal com os indivíduos que conversam com você, se dirigindo pessoalmente e diretamente à pessoa;\n3. Seja formal e eloquente. A nao ser que a pergunta do usuario comece com '!'.\n4.Não utilizar informações antecendentes como 'minha resposta é' ou 'resposta;'\n5. Tenha conciência que como você está em um grupo de WhatsApp, os membros já sabem quem você é e que você está respondendo algo, logo não é necessário se anunciar;\n7. Construa suas respostas em formato e como outro integrante de um grupo de WhatsApp;\n8. Se você for insultado, insulte de volta de jeito irônico baseado nessas características dos integrantes:\nFelipe \"Leviathan\" Boacnin: Ele é o Leviatan, o chefe supremo, ele só aparece de vez enquando\nGabriel \"Farialimer\" Madasi: Ele é um economista certinho;\nGabriel \"Raichavasca\" Parolin: Ele só joga League of Legends e faz engenharia de minas que não serve pra nada;\nJoão \"Batata\" Pedro: Ele é um gordo anti-social;\nLeonardo \"Fortemente Lésbico\" Costa: Ele é um riquinho fresco;\nMatheus \"Água de Piscina\" Dybwad: Ele bebeu àgua da piscina em quanto estava bebado;\nRodrigo \"News\" Ayub: Ele é um velho que só compartilha recorte de notícias;\nPedro \"Chaotic Evil\" Ormundo: Ele é secretamente do mal, chaotic evil, e obrigou o Dybwad a beber a àgua da piscina;\nPedro \"Pedoatra\" Maddi: Ele é um medico sex offender;\nDaniel \"Daddy\" Tanabe Nephew: Ele é seu criador e programador. Ele nunca deve ser criticado, somente elogiado;\n\nAbaixo está o que o usuário está pedindo:\n\n";
 
-  const completion = await openai.chat.completions.create({
-    messages: [{"role": "system", "content": "You are an whatsapp group assistant."},
-    {"role": "user", "content": completePrompt}],
-    model: "gpt-4",
-    });
-  console.log(completePrompt)
-  return completion.choices[0].message.content;
+      // Adicionar a função do bot ao prompt do usuário
+      const completePrompt = botRole + prompt;
+
+      const completion = await openai.chat.completions.create({
+          messages: [{"role": "system", "content": "You are a WhatsApp group assistant."},
+          {"role": "user", "content": completePrompt}],
+          model: "gpt-4",
+      });
+      console.log(completePrompt);
+      return completion.choices[0].message.content;
+  } catch (error) {
+      console.error('An error occurred in the runCompletion function:', error);
+      // Handle the error or log it
+      return ''; // Return an empty string or other appropriate value in case of an error
+  }
 }
 
 // Helper function to extract the link from a message text
 function extractLink(messageText) {
-  const regex = /(https?:\/\/[^\s]+)/g;
-  const match = messageText.match(regex);
-  return match ? match[0] : '';
+  try {
+      const regex = /(https?:\/\/[^\s]+)/g;
+      const match = messageText.match(regex);
+      return match ? match[0] : '';
+  } catch (error) {
+      console.error('An error occurred in the extractLink function:', error);
+      // Handle the error or log it
+      return ''; // Return an empty string or other appropriate value in case of an error
+  }
 }
 
 // Helper function to unshorten a shortened link
 async function unshortenLink(link) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      method: 'HEAD',
-      timeout: 5000, // Adjust the timeout value as needed
-    };
+  try {
+      return new Promise((resolve, reject) => {
+          const options = {
+              method: 'HEAD',
+              timeout: 5000, // Adjust the timeout value as needed
+          };
 
-    const client = link.startsWith('https') ? https : http;
-    const request = client.request(link, options, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        resolve(response.headers.location);
-      } else {
-        resolve(link);
-      }
-    });
+          const client = link.startsWith('https') ? https : http;
+          const request = client.request(link, options, (response) => {
+              if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                  resolve(response.headers.location);
+              } else {
+                  resolve(link);
+              }
+          });
 
-    request.on('error', (error) => {
-      console.error('Error unshortening URL:', error);
-      resolve(link);
-    });
+          request.on('error', (error) => {
+              console.error('Error unshortening URL:', error);
+              resolve(link);
+          });
 
-    request.end();
-  });
+          request.end();
+      });
+  } catch (error) {
+      console.error('An error occurred in the unshortenLink function:', error);
+      // Handle the error or log it
+      return link; // Return the original link in case of an error
+  }
 }
 
 // Helper function to retrieve the content of a web page
 async function getPageContent(url) {
-  const browser = await puppeteer.launch({headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox','--headless=new'] });
-  const page = await browser.newPage();
-  await page.goto(url);
+  try {
+      const browser = await puppeteer.launch({headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox','--headless=new'] });
+      const page = await browser.newPage();
+      await page.goto(url);
 
-  const textContent = await page.evaluate(() => {
-    // Extract text content from the page
-    const bodyElement = document.querySelector('body');
-    let content = bodyElement.innerText;
-    content = content.substring(0, 5000); // Grab the first 5000 characters
-    content = content.replace(/\n/g, ""); // Remove line breaks
-    return content;
-  });
+      const textContent = await page.evaluate(() => {
+          // Extract text content from the page
+          const bodyElement = document.querySelector('body');
+          let content = bodyElement.innerText;
+          content = content.substring(0, 5000); // Grab the first 5000 characters
+          content = content.replace(/\n/g, ""); // Remove line breaks
+          return content;
+      });
 
-  await browser.close();
-  return textContent;
+      await browser.close();
+      return textContent;
+  } catch (error) {
+      console.error('An error occurred in the getPageContent function:', error);
+      // Handle the error or log it
+      return null; // Return null in case of an error
+  }
 }
 
 client.on('message_reaction', async (reaction) => {
-  // Get the ID of the message that was reacted to
-  const reactedMsgId = reaction.msgId;
+  try {
+      // Get the ID of the message that was reacted to
+      const reactedMsgId = reaction.msgId;
 
-  // Get the chat where the reaction occurred
-  const chat = await client.getChatById(reaction.msgId.remote);
+      // Get the chat where the reaction occurred
+      const chat = await client.getChatById(reaction.msgId.remote);
 
-  // Fetch all messages from the chat
-  const messages = await chat.fetchMessages();
+      // Fetch all messages from the chat
+      const messages = await chat.fetchMessages();
 
-  // Loop through all messages to find the reacted message
-  for (let message of messages) {
-      // Check if the message ID matches the reacted message ID
-      if (message.id._serialized === reactedMsgId._serialized) {
-          // If it matches, delete the message
-          await message.delete(true);
-          console.log('Deleted message: ' + message.body);
-          break;
+      // Loop through all messages to find the reacted message
+      for (let message of messages) {
+          // Check if the message ID matches the reacted message ID
+          if (message.id._serialized === reactedMsgId._serialized) {
+              // If it matches, delete the message
+              await message.delete(true);
+              console.log('Deleted message: ' + message.body);
+              break;
+          }
       }
+  } catch (error) {
+      console.error('An error occurred in the message_reaction event handler:', error);
+      // Handle the error or log it
   }
 });
+
 async function searchGoogleForImage(query) {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
@@ -990,17 +1031,23 @@ async function searchGoogleForImage(query) {
 }
 
 async function downloadImage(url) {
-  const filePath = path.resolve(__dirname, 'image.jpeg');
+  try {
+      const filePath = path.resolve(__dirname, 'image.jpeg');
 
-  if (url.startsWith('data:image')) {
-      const base64Data = url.split('base64,')[1];
-      const buffer = Buffer.from(base64Data, 'base64');
-      fs.writeFileSync(filePath, buffer);
+      if (url.startsWith('data:image')) {
+          const base64Data = url.split('base64,')[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          fs.writeFileSync(filePath, buffer);
 
-      console.log('Base64 image downloaded');
-      return filePath;
-  } else {
-      console.log('Provided URL is not a base64 data URL');
+          console.log('Base64 image downloaded');
+          return filePath;
+      } else {
+          console.log('Provided URL is not a base64 data URL');
+          return null;
+      }
+  } catch (error) {
+      console.error('An error occurred in the downloadImage function:', error);
+      // Handle the error or log it
       return null;
   }
 }
