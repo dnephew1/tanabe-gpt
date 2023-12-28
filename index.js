@@ -738,12 +738,17 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     }
   }
 //////////////////////STICKER//////////////////////////////////
-  if (message.hasMedia && message.body.includes('#sticker')) {
-    const chat = await message.getChat();
-    await chat.sendStateTyping();
-    const attachmentData = await message.downloadMedia();
-    message.reply(attachmentData, message.from,{ sendMediaAsSticker: true });
+if (message.hasMedia && message.body.includes('#sticker')) {
+  try {
+      const chat = await message.getChat();
+      await chat.sendStateTyping();
+      const attachmentData = await message.downloadMedia();
+      message.reply(attachmentData, message.from, { sendMediaAsSticker: true });
+  } catch (error) {
+      console.error('An error occurred in the sticker handling code:', error);
+      // Handle the error or log it
   }
+}
   if (message.body.startsWith('#sticker')) {
     const chat = await message.getChat();
     await chat.sendStateTyping();
