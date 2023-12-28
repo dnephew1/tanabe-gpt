@@ -745,7 +745,44 @@ if (message.body.toLowerCase().includes('@admin') && !message.hasQuotedMsg) {
     const id1 = await message.getChat(id);
     console.log(id1);
   }
+  if (message.body.startsWith('#sticker')) {
+    const query = message.body.slice(9).trim(); // Remove "#sticker" from the query
+
+    if (query) {
+        try {
+            // Call the search function and get the image URL
+            const imageUrl = await searchGoogleForImage(query);
+
+            // Check if an image URL was returned
+            if (imageUrl) {
+                // Call the download function and wait for the download to complete
+                const imagePath = await downloadImage(imageUrl);
+
+                // Check if the download was successful
+                if (imagePath) {
+                    const imageAsSticker = MessageMedia.fromFilePath(imagePath);
+
+                    // Send the image as a sticker
+                    await client.sendMessage(message.from, imageAsSticker, {
+                        sendMediaAsSticker: true
+                    });
+
+                } else {
+                    message.reply('Failed to download the image for the sticker.');
+                }
+            } else {
+                message.reply('No image found for the given query.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            message.reply('An error occurred while processing your request.');
+        }
+    } else {
+        message.reply('Please provide a keyword after #sticker.');
+    }
+}
 });
+
 /////////////////////FUNCTIONS/////////////////////////
 // Function to scrape news from the website (fetches only the first 5 news)
 async function scrapeNews() {
@@ -833,6 +870,22 @@ async function runCompletion(prompt) {
   return completion.choices[0].message.content;
 }
 
+async function runCompletion(prompt) {
+  // Função do bot
+  const botRole = "Você é um bot assistente pessoal em um grupo de WhatsApp de amigos, sua função é:\n1. Ser conciso nas suas respostas;\n2. Ser pessoal com os indivíduos que conversam com você, se dirigindo pessoalmente e diretamente à pessoa;\n3. Seja formal e eloquente. A nao ser que a pergunta do usuario comece com '!'.\n4.Não utilizar informações antecendentes como 'minha resposta é' ou 'resposta;'\n5. Tenha conciência que como você está em um grupo de WhatsApp, os membros já sabem quem você é e que você está respondendo algo, logo não é necessário se anunciar;\n7. Construa suas respostas em formato e como outro integrante de um grupo de WhatsApp;\n8. Se você for insultado, insulte de volta de jeito irônico baseado nessas características dos integrantes:\nFelipe \"Leviathan\" Boacnin: Ele é o Leviatan, o chefe supremo, ele só aparece de vez enquando\nGabriel \"Farialimer\" Madasi: Ele é um economista certinho;\nGabriel \"Raichavasca\" Parolin: Ele só joga League of Legends e faz engenharia de minas que não serve pra nada;\nJoão \"Batata\" Pedro: Ele é um gordo anti-social;\nLeonardo \"Fortemente Lésbico\" Costa: Ele é um riquinho fresco;\nMatheus \"Água de Piscina\" Dybwad: Ele bebeu àgua da piscina em quanto estava bebado;\nRodrigo \"News\" Ayub: Ele é um velho que só compartilha recorte de notícias;\nPedro \"Chaotic Evil\" Ormundo: Ele é secretamente do mal, chaotic evil, e obrigou o Dybwad a beber a àgua da piscina;\nPedro \"Pedoatra\" Maddi: Ele é um medico sex offender;\nDaniel \"Daddy\" Tanabe Nephew: Ele é seu criador e programador. Ele nunca deve ser criticado, somente elogiado;\n\nAbaixo está o que o usuário está pedindo:\n\n";
+  
+  // Adicionar a função do bot ao prompt do usuário
+  const completePrompt = botRole + prompt;
+
+  const completion = await openai.chat.completions.create({
+    messages: [{"role": "system", "content": "You are an whatsapp group assistant."},
+    {"role": "user", "content": completePrompt}],
+    model: "gpt-4",
+    });
+  console.log(completePrompt)
+  return completion.choices[0].message.content;
+}
+
 // Helper function to extract the link from a message text
 function extractLink(messageText) {
   const regex = /(https?:\/\/[^\s]+)/g;
@@ -906,3 +959,48 @@ client.on('message_reaction', async (reaction) => {
       }
   }
 });
+async function searchGoogleForImage(query) {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+
+    try {
+        const formattedQuery = query.split(' ').join('+') + '+meme';
+        const url = `https://www.google.com/search?q=${formattedQuery}&tbm=isch`;
+
+        await page.goto(url);
+
+        const imageUrl = await page.evaluate(() => {
+            const container = document.querySelector('div.mJxzWe');
+            const image = container ? container.querySelector('img') : null;
+            return image ? image.src : null;
+        });
+
+        if (imageUrl) {
+            return imageUrl;
+        } else {
+            console.log('No image found inside div.mJxzWe');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error while searching for image:', error);
+        return null;
+    } finally {
+        await browser.close();
+    }
+}
+
+async function downloadImage(url) {
+  const filePath = path.resolve(__dirname, 'image.jpeg');
+
+  if (url.startsWith('data:image')) {
+      const base64Data = url.split('base64,')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(filePath, buffer);
+
+      console.log('Base64 image downloaded');
+      return filePath;
+  } else {
+      console.log('Provided URL is not a base64 data URL');
+      return null;
+  }
+}
