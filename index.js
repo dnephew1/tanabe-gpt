@@ -999,14 +999,20 @@ client.on('message_reaction', async (reaction) => {
 });
 
 async function searchGoogleForImage(query) {
-  const browser = await puppeteer.launch({headless: 'new', args: ['--no-sandbox','--disable-setuid-sandbox','--headless=new'] });
-  const page = await browser.newPage();
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
 
     try {
         const formattedQuery = query.split(' ').join('+') + '+meme';
         const url = `https://www.google.com/search?q=${formattedQuery}&tbm=isch`;
 
-        await page.goto(url);
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // Optional: Wait for the image container to be visible
+        await page.waitForSelector('div.czzyk.XOEbc', { visible: true });
 
         const imageUrl = await page.evaluate(() => {
             const container = document.querySelector('div.czzyk.XOEbc');
