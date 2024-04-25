@@ -1012,7 +1012,7 @@ async function searchGoogleForImage(query) {
         await page.goto(url, { waitUntil: 'networkidle2' });
 
         // Optional: Wait for the image container to be visible
-        await page.waitForSelector('div.czzyk.XOEbc', { visible: true });
+        await page.waitForSelector('div.kCmkOe', { visible: true });
 
         const imageUrl = await page.evaluate(() => {
             const container = document.querySelector('div.kCmkOe');
