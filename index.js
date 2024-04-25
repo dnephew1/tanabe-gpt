@@ -1009,7 +1009,7 @@ async function searchGoogleForImage(query) {
         await page.goto(url);
 
         const imageUrl = await page.evaluate(() => {
-            const container = document.querySelector('div.H8Rx8c');
+            const container = document.querySelector('div.czzyk.XOEbc');
             const image = container ? container.querySelector('img') : null;
             return image ? image.src : null;
         });
@@ -1017,7 +1017,7 @@ async function searchGoogleForImage(query) {
         if (imageUrl) {
             return imageUrl;
         } else {
-            console.log('No image found inside div.H8Rx8c');
+            console.log('No image found inside div.czzyk.XOEbc');
             return null;
         }
     } catch (error) {
