@@ -1007,7 +1007,7 @@ async function searchGoogleForImage(query) {
 
     try {
         const formattedQuery = query.split(' ').join('+') + '+meme';
-        const url = `https://www.google.com/search?q=${formattedQuery}&tbm=isch`;
+        const url = `https://www.google.com/search?q=${formattedQuery}&sca_esv=adfface043f3fd58&gbv=1&tbm=isch`;
 
         await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -1015,7 +1015,7 @@ async function searchGoogleForImage(query) {
         await page.waitForSelector('div.czzyk.XOEbc', { visible: true });
 
         const imageUrl = await page.evaluate(() => {
-            const container = document.querySelector('div.czzyk.XOEbc');
+            const container = document.querySelector('div.kCmkOe');
             const image = container ? container.querySelector('img') : null;
             return image ? image.src : null;
         });
@@ -1023,7 +1023,7 @@ async function searchGoogleForImage(query) {
         if (imageUrl) {
             return imageUrl;
         } else {
-            console.log('No image found inside div.czzyk.XOEbc');
+            console.log('No image found inside div.kCmkOe');
             return null;
         }
     } catch (error) {
