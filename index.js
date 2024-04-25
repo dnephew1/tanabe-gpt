@@ -1007,15 +1007,15 @@ async function searchGoogleForImage(query) {
 
     try {
         const formattedQuery = query.split(' ').join('+') + '+meme';
-        const url = `https://www.google.com/search?q=${formattedQuery}&tbm=isch`;
+        const url = `https://www.google.com/search?q=${formattedQuery}&sca_esv=adfface043f3fd58&gbv=1&tbm=isch`;
 
         await page.goto(url, { waitUntil: 'networkidle2' });
 
         // Optional: Wait for the image container to be visible
-        await page.waitForSelector('div.H8Rx8c', { visible: true });
+        await page.waitForSelector('div.kCmkOe', { visible: true });
 
         const imageUrl = await page.evaluate(() => {
-            const container = document.querySelector('div.H8Rx8c');
+            const container = document.querySelector('div.kCmkOe');
             const image = container ? container.querySelector('img') : null;
             return image ? image.src : null;
         });
@@ -1023,7 +1023,7 @@ async function searchGoogleForImage(query) {
         if (imageUrl) {
             return imageUrl;
         } else {
-            console.log('No image found inside div.H8Rx8c');
+            console.log('No image found inside div.kCmkOe');
             return null;
         }
     } catch (error) {
@@ -1035,23 +1035,30 @@ async function searchGoogleForImage(query) {
 }
 
 async function downloadImage(url) {
-  try {
-      const filePath = path.resolve(__dirname, 'image.jpeg');
+    const filePath = path.resolve(__dirname, 'image.jpeg');
 
-      if (url.startsWith('data:image')) {
-          const base64Data = url.split('base64,')[1];
-          const buffer = Buffer.from(base64Data, 'base64');
-          fs.writeFileSync(filePath, buffer);
-
-          console.log('Base64 image downloaded');
-          return filePath;
-      } else {
-          console.log('Provided URL is not a base64 data URL');
-          return null;
-      }
-  } catch (error) {
-      console.error('An error occurred in the downloadImage function:', error);
-      // Handle the error or log it
-      return null;
-  }
+    try {
+        if (url.startsWith('data:image')) {
+            // Handle base64 URLs
+            const base64Data = url.split('base64,')[1];
+            const buffer = Buffer.from(base64Data, 'base64');
+            fs.writeFileSync(filePath, buffer);
+            console.log('Base64 image downloaded');
+        } else {
+            // Handle regular image URLs
+            const response = await axios({
+                url,
+                method: 'GET',
+                responseType: 'arraybuffer'
+            });
+            const buffer = Buffer.from(response.data, 'binary');
+            fs.writeFileSync(filePath, buffer);
+            console.log('Image downloaded from URL');
+        }
+        return filePath;
+    } catch (error) {
+        console.error('An error occurred in the downloadImage function:', error);
+        return null;
+    }
 }
+module.exports = downloadImage;
