@@ -21,5 +21,7 @@ npm install --no-audit
 # Update global npm packages without auditing
 npm update -g --no-audit
 
+mkdir stickers
+
 # Provide feedback to the user
 echo "Setup complete. index.js and .env files created if they didn't exist, npm packages installed, global npm packages updated, and .env file populated with the OpenAI API key."
