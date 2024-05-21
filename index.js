@@ -26,10 +26,23 @@ if(fs.existsSync(SESSION_FILE_PATH)) {
 
 // Use the saved values
 const client = new Client({
+    webVersion: '2.2409.2',
+    webVersionCache: {
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2409.2.html'
+    },
     session: sessionData,
     puppeteer: {
       headless: true,
-      args: ['--no-sandbox','--disable-setuid-sandbox'],},
+      args: ['--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ],},
     authStrategy: new LocalAuth(),
 });
 
