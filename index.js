@@ -14,6 +14,7 @@ const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
 const { id } = require('translate-google/languages');
 const sentMessages = new Map();
+const adminPhoneNumber = '#'; // WhatsApp format for phone numbers without the '+' sign
 
 // Path where the session data will be stored
 const SESSION_FILE_PATH = './session.json';
@@ -60,8 +61,17 @@ client.on('qr', qr => {
 client.initialize();
 
 // Confirm client is ready
-client.on('ready', () => {
+client.on('ready', async () => {
   console.log('Client is ready!');
+
+  // Send "I'm alive!" message to the admin phone number
+  const adminContact = `${adminPhoneNumber}@c.us`; // WhatsApp format for phone numbers
+  try {
+    await client.sendMessage(adminContact, "I'm alive!");
+    console.log(`Sent "I'm alive!" message to ${adminContact}`);
+  } catch (error) {
+    console.error(`Failed to send "I'm alive!" message: ${error}`);
+  }
 });
 
 // Reconnect on disconnection
