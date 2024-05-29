@@ -355,7 +355,7 @@ client.on('message', async message => {
     }
 
     ///////////////////Ayub News Fut///////////////////
-    if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
+    if (inputLower[0].toLowerCase() === '#ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
       console.log('\n---------------------AYUB NEWS FUT---------------------\n')
       const chat = await message.getChat();
       await chat.sendStateTyping();
@@ -1110,35 +1110,27 @@ async function downloadImage(url) {
   }
 }
 
-// Function to store message details and delete after timeout
 async function deleteMessageAfterTimeout(sentMessage, timeout) {
   try {
-    // Store the message and chat IDs
-    const messageId = sentMessage.id._serialized;
-    const chatId = sentMessage.to._serialized;
-
-    // Log or store these IDs somewhere if needed for debugging or tracking
-    // console.log(`Stored Message ID: ${messageId}, Chat ID: ${chatId}`);
-
-    // Set a timeout to delete the message after the specified time
     setTimeout(async () => {
       try {
-        // Get the chat instance using the stored chat ID
-        const chat = await client.getChatById(chatId);
-
-        // Check if the chat exists
+        // Fetch the chat using the getChat method from the Message class
+        const chat = await sentMessage.getChat();
+        
         if (!chat) {
           console.error('Failed to find the chat to delete the message');
           return;
         }
 
-        // Get the specific message using the stored message ID
-        const messageToDelete = await client.getMessageById(messageId);
+        // Fetch the latest messages from the chat
+        const messages = await chat.fetchMessages({ limit: 50 });
+        console.log(`Fetched ${messages.length} messages from the chat.`);
 
-        // Delete the message if it exists
+        // Find the specific message to delete
+        const messageToDelete = messages.find(msg => msg.id._serialized === sentMessage.id._serialized);
         if (messageToDelete) {
           await messageToDelete.delete(true);
-          // console.log(`Deleted message: ${messageToDelete.body}`);
+          console.log(`Deleted message: ${messageToDelete.body}`);
         } else {
           console.error('Failed to find the message to delete');
         }
