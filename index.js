@@ -14,7 +14,7 @@ const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
 const { id } = require('translate-google/languages');
 const sentMessages = new Map();
-const adminPhoneNumber = '***REMOVED***'; // WhatsApp format for phone numbers without the '+' sign
+const adminPhoneNumber = '0000000'; // WhatsApp format for phone numbers without the '+' sign
 
 
 // Path where the session data will be stored
