@@ -14,7 +14,7 @@ const translate = require('translate-google');
 const { http, https } = require('follow-redirects');
 const { id } = require('translate-google/languages');
 const sentMessages = new Map();
-const adminPhoneNumber = '0000000'; // WhatsApp format for phone numbers without the '+' sign
+const adminPhoneNumber = '0000000000'; // WhatsApp format for phone numbers without the '+' sign
 
 
 // Path where the session data will be stored
@@ -117,16 +117,17 @@ client.on('message', async message => {
     const inputLower = input.map(item => item.toLowerCase());
     const expectedHash = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
 
+    await calculateStickerHash(message);
     // Ayub news hash for verification
     const ayubnews = '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994';
 
     /////////////////////Summarize X messages/////////////////
-    if (inputLower[0] === '#resumo' && inputLower[1] === 'pf') {
-      const limit = parseInt(input[2]);
+    if (inputLower[0] === '#resumo') {
+      const limit = parseInt(input[1]);
       if (isNaN(limit)) {
         const chat = await message.getChat();
         await chat.sendStateTyping();
-        message.reply('Por favor, forneça um número válido após "#resumo pf" para definir o limite de mensagens.')
+        message.reply('Por favor, forneça um número válido após "#resumo" para definir o limite de mensagens.')
         .then(sentMessage => {
           // Delete the bot's message after 1 minute
           deleteMessageAfterTimeout(sentMessage, 1 * 10 * 1000); // 5 minutes in milliseconds
@@ -147,7 +148,7 @@ client.on('message', async message => {
           message.reply('Não há mensagens suficientes para gerar um resumo.')
           .then(sentMessage => {
             // Delete the bot's message after 1 minute
-            deleteMessageAfterTimeout(sentMessage, 1 * 60 * 1000); // 5 minutes in milliseconds
+            deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
           });
           
           return;
@@ -225,7 +226,7 @@ client.on('message', async message => {
             message.reply('Eu não consegui acessar o link para fazer um resumo.')
             .then(sentMessage => {
               // Delete the bot's message after 1 minute
-              deleteMessageAfterTimeout(sentMessage, 1 * 60 * 1000); // 5 minutes in milliseconds
+              deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
             });       
             }
         } else {
@@ -253,146 +254,132 @@ client.on('message', async message => {
     }
 
     /////////////////////Summarize 1hr////////////////
-    if (message.hasMedia && message.type === 'sticker' && (!links || links.length === 0)) {
-      const stickerData = await message.downloadMedia();
-
-      // Calculate the SHA-256 hash of the sticker image
-      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-
-      if (hash === expectedHash) {
-        const chat = await message.getChat();
-        await chat.sendStateTyping();
-        const messages = await chat.fetchMessages({ limit: 500 });
-        const lastMessage = messages[messages.length - 2];
-        const lastMessageTimestamp = lastMessage.timestamp;
-        const oneHourBeforeLastMessageTimestamp = lastMessageTimestamp - 3600;
-        const messagesSinceLastHour = messages.slice(0, -1).filter(message => (
-          message.timestamp > oneHourBeforeLastMessageTimestamp &&
-          message.fromMe === false &&
-          message.body.trim() !== ''
-        ));
-        const messageTexts = (await Promise.all(messagesSinceLastHour.map(async message => {
-          const contact = await message.getContact();
-          const name = contact.name || 'Unknown';
-          return `>>${name}: ${message.body}.\n`;
-        }))).join(' ');
-
-        console.log('\n---------------------RESUMO DE MENSAGENS---------------------\n')
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        const prompt = `${name} esta pedindo para que você faça um resumo das mensagens dessa conversa do grupo e diga no início da sua resposta que esse é o resumo das mensagens na última hora:\n\nINÍCIO DAS MENSAGENS:\n\n${messageTexts}\nFIM DAS MENSAGENS.\n\nSe não houver mensagens suficientes, responda apenas: "Não há mensagens suficientes para gerar um resumo."`;
-        runCompletion(prompt)
-          .then(result => result.trim())
-            .then(result => message.reply(result) + console.log('\nBOT: ' + result + '\n---------------------FIM---------------------\n'))
-              .then(sentMessage => {
-                // Delete the bot's message after 5 minutes
-                deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
-              });
-        }
-      return;
-    }
-
-    ///////////////////////Respond to #////////////////
-    if (message.body.startsWith("#") && !message.body.includes("#sticker")) {
-      console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
-
-      const chat = await message.getChat();
-      const contact = await message.getContact();
-      const name = contact.name || 'Unknown';
-      await chat.sendStateTyping();
-
-      let prompt = `${name} está perguntando: ${message.body.substring(1)}\n`;
-
-      if (message.hasQuotedMsg) {
-        const quotedMessage = await message.getQuotedMessage();
-        console.log('CONTEXTO: ' + quotedMessage.body)
-        prompt += '\n\nPara contexto adicional, a conversa está se referindo a essa mensagem:' + quotedMessage.body + '\n';
-      }
-
-      runCompletion(prompt)
-        .then(result => result.trim())
-        .then(result => {
-          console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
-          let colonIndex = result.indexOf(':');
-          let cleanedResult = colonIndex !== -1 && colonIndex <= 25 ? result.slice(colonIndex + 1).trim() : result;
-          return message.reply(cleanedResult);
-        })
-    }
-
-    /////////////////////Ayub news///////////////////
     if (message.hasMedia && message.type === 'sticker') {
       const stickerData = await message.downloadMedia();
-      // Calculate the SHA-256 hash of the sticker image
       const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
-      // Compare sticker hash with the specified SHA hash
-      if (message.hasMedia && message.type === 'sticker' && hash === '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994') {
-        console.log('\n---------------------AYUB NEWS DE HOJE---------------------\n');
-        const chat = await message.getChat();
-        await chat.sendStateTyping();
-        try {
-          // Scrape news
-          const news = await scrapeNews();
-          // Translate news to Portuguese using translate-google
-          const translatedNews = await translateToPortuguese(news);
+      console.log('Calculated sticker hash:', hash); // Log the calculated hash
 
-          // Prepare reply
+      const expectedHashResumo = 'ca1b990a37591cf4abe221eedf9800e20df8554000b972fb3c5a474f2112cbaa';
+      const expectedHashAyub = '2ec460ac4810ace36065b5ef1fe279404ba812b04266ffb376a1c404dbdbd994';
+
+      if (hash === expectedHashResumo) {
+          console.log('Resumo sticker detected'); // Log when the resumo sticker is detected
+          
+          const limit = 5; // Set the limit for the number of messages to summarize
+          const chat = await message.getChat();
+          await chat.sendStateTyping();
+          const messages = await chat.fetchMessages({ limit: limit });
+          const messagesWithoutMe = messages.slice(0, -1).filter(message => (
+              message.fromMe === false &&
+              message.body.trim() !== ''
+          ));
+          
+          if (messagesWithoutMe.length === 0) {
+              message.reply('Não há mensagens suficientes para gerar um resumo.')
+              .then(sentMessage => {
+                  // Delete the bot's message after 1 minute
+                  deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 1 minute in milliseconds
+              });
+              return;
+          }
+          
+          const messageTexts = (await Promise.all(messagesWithoutMe.map(async message => {
+              const contact = await message.getContact();
+              const name = contact.name || 'Unknown';
+              return `>>${name}: ${message.body}.\n`;
+          }))).join(' ');
+
+          console.log('\n---------------------RESUMO DE MENSAGENS #---------------------\n')
           const contact = await message.getContact();
           const name = contact.name || 'Unknown';
-          let reply = `Aqui estão as notícias mais relevantes de hoje, ${name}:\n\n`;
-          translatedNews.forEach((newsItem, index) => {
-            reply += `${index + 1}. ${newsItem}\n`;
-          });
+          const prompt = `${name} está pedindo para que você faça um resumo das últimas ${limit} mensagens dessa conversa do grupo e diga no início da sua resposta que esse é o resumo das últimas ${limit} mensagens::\n\nINÍCIO DAS MENSAGENS:\n\n${messageTexts}\nFIM DAS MENSAGENS.\n\nSe não houver mensagens suficientes, responda apenas: "Não há mensagens suficientes para gerar um resumo."`;
+          runCompletion(prompt)
+              .then(result => result.trim())
+              .then(result => {
+                  message.reply(result);
+                  console.log('\nBOT: ' + result + '\n---------------------FIM---------------------\n');
+              })
+              .then(sentMessage => {
+                  // Delete the bot's message after 5 minutes
+                  deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
+              });
 
+      ///////////////////////Ayub News Sticker/////////////////////  
 
-          // Reply to the message
-          await message.reply(reply);
-          console.log('BOT: ' + reply + '\n---------------------FIM---------------------\n')
-        } catch (error) {
-          console.error('\n---------------------ERROR---------------------\nError accessing fetching news:', error + '\n---------------------ERROR---------------------');
-          message.reply('Eu não consegui acessar as noticias de hoje.')
-        }
+      } else if (hash === expectedHashAyub) {
+          console.log('Ayub news sticker detected'); // Log when the Ayub news sticker is detected
+
+          const chat = await message.getChat();
+          await chat.sendStateTyping();
+          try {
+              // Ayub news logic
+              const news = await scrapeNews();
+              if (news.length === 0) {
+                  await message.reply('Não há notícias disponíveis no momento.');
+                  return;
+              }
+
+              const translatedNews = await translateToPortuguese(news);
+
+              const contact = await message.getContact();
+              const name = contact.name || 'Unknown';
+              let reply = `Aqui estão as notícias mais relevantes de hoje, ${name}:\n\n`;
+              translatedNews.forEach((newsItem, index) => {
+                  reply += `${index + 1}. ${newsItem}\n`;
+              });
+
+              await message.reply(reply);
+              console.log('BOT: ' + reply + '\n---------------------FIM---------------------\n');
+          } catch (error) {
+              console.error('\n---------------------ERROR---------------------\nError accessing news:', error + '\n---------------------ERROR---------------------');
+              message.reply('Eu não consegui acessar as noticias de hoje.');
+          }
+      } else {
+          console.log('Sticker hash does not match any expected hash'); // Log when the hash does not match any expected hash
       }
+    } else {
+        console.log('No media or not a sticker'); // Log when the message does not contain media or is not a sticker
     }
 
     ///////////////////Ayub News Fut///////////////////
-    if (inputLower[0].toLowerCase() === '#ayub' && inputLower[1].toLowerCase() === 'news' && inputLower[2].toLowerCase() === 'fut') {
-      console.log('\n---------------------AYUB NEWS FUT---------------------\n')
+    if (inputLower[0] === '#ayubnews' && inputLower[1] === 'fut') {
+      console.log('---------------------AYUB NEWS FUT---------------------\n');
       const chat = await message.getChat();
       await chat.sendStateTyping();
-      try {
-        // Scrape news
-        const news = await scrapeNews2();
 
-        // Prepare reply
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        let reply = `Aqui estão as notícias sobre futebol mais relevantes de hoje, ${name}:\n\n`;
-        news.forEach((newsItem, index) => {
-          reply += `${index + 1}. ${newsItem.title}\n`;
-        });
+      const news = await scrapeNews2();
 
+      if (news.length > 0) {
+          const contact = await message.getContact();
+          const name = contact.name || 'Unknown';
+          let reply = `Aqui estão as notícias sobre futebol mais relevantes de hoje, ${name}:\n\n`;
+          news.forEach((newsItem, index) => {
+              reply += `${index + 1}. ${newsItem.title}\n`;
+          });
 
-        // Reply to the message
-        message.reply(reply)
-        console.log('\n', reply + '\n---------------------FIM---------------------\n')
-      } catch (error) {
-        console.error('An error occurred:', error);
+          message.reply(reply);
+          console.log('\n', reply + '\n---------------------FIM---------------------\n');
+      } else {
+          message.reply('Nenhum artigo de futebol encontrado.\n---------------------FIM---------------------\n')
+              .then(sentMessage => {
+                  // Delete the bot's message after 1 minute
+                  deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 1 minute in milliseconds
+              });
       }
-    }
 
-    ///////////////////////Ayub News Busca////////////////////////
-    if (inputLower[0].toLowerCase() === 'ayub' && inputLower[1].toLowerCase() === 'news' && !inputLower.includes('fut')) {
-      const keywords = input.slice(2).join(' ');
-      console.log('---------------------AYUB NEWS BUSCA---------------------', input[2])
-      const chat = await message.getChat();
-      await chat.sendStateTyping();
+    /////////////////Ayub News Busca///////////////////////
 
-      const query = `${keywords}`;
-      const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iar=news&df=w&ia=news&kl=br-pt`;
+  } else if (inputLower[0] === '#ayubnews') {
+    const keywords = input.slice(1).join(' ');
+    console.log('---------------------AYUB NEWS BUSCA---------------------', keywords);
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
 
-      try {
-        const browser = await puppeteer.launch({
-          args: ['--no-sandbox',
+    const query = `${keywords}`;
+    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iar=news&df=w&ia=news&kl=br-pt`;
+
+    const browser = await puppeteer.launch({
+        args: ['--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
@@ -400,61 +387,70 @@ client.on('message', async message => {
             '--no-zygote',
             '--single-process',
             '--disable-gpu']
-        });
-        const page = await browser.newPage();
-        await page.goto(searchUrl);
-        await page.waitForSelector('.result__body');
+    });
+    const page = await browser.newPage();
+
+    try {
+        console.log('Navigating to:', searchUrl);
+        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+        console.log('Waiting for selector .result__body');
+        await page.waitForSelector('.result__body', { timeout: 60000 });
+
         const newsElements = await page.$$('.result__body');
-
         let newsData = [];
-        for (let i = 0; i < 5 && i < newsElements.length; i++) {
-          const titleElement = await newsElements[i].$('.result__a[rel="noopener"]');
-          const title = await (await titleElement.getProperty('textContent')).jsonValue();
-          const sourceElement = await newsElements[i].$('.result__url');
-          const source = await (await sourceElement.getProperty('textContent')).jsonValue();
-          const timeElement = await newsElements[i].$('.result__timestamp');
-          const time = await (await timeElement.getProperty('textContent')).jsonValue();
-          const previewElement = await newsElements[i].$('.result__snippet');
-          const preview = await (await previewElement.getProperty('textContent')).jsonValue();
 
+        if (newsElements.length > 0) {
+            for (let i = 0; i < 5 && i < newsElements.length; i++) {
+                const titleElement = await newsElements[i].$('.result__a[rel="noopener"]');
+                const title = await (await titleElement.getProperty('textContent')).jsonValue();
+                const sourceElement = await newsElements[i].$('.result__url');
+                const source = await (await sourceElement.getProperty('textContent')).jsonValue();
+                const timeElement = await newsElements[i].$('.result__timestamp');
+                const time = await (await timeElement.getProperty('textContent')).jsonValue();
+                const previewElement = await newsElements[i].$('.result__snippet');
+                const preview = await (await previewElement.getProperty('textContent')).jsonValue();
 
-          const newsItem = {
-            title,
-            preview,
-            source,
-            time
-          };
-          newsData.push(newsItem);
+                const newsItem = {
+                    title,
+                    preview,
+                    source,
+                    time
+                };
+                newsData.push(newsItem);
+            }
+        } else {
+            console.log('No news elements found with selector .result__body');
         }
 
         await browser.close();
 
         if (newsData.length > 0) {
-          const contact = await message.getContact();
-          const name = contact.name || 'Unknown';
-          let reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}", ${name}:\n\n`;
-          newsData.forEach((item, index) => {
-            const numberedTitle = `${index + 1}. *${item.title}*\nPreview: ${item.preview}\nHora: ${item.time}\nFonte: ${item.source}\n\n`;
-            reply += numberedTitle;
-          });
-          message.reply(reply)
-          console.log('\nNEWS:', reply + '\n---------------------FIM---------------------\n')
+            const contact = await message.getContact();
+            const name = contact.name || 'Unknown';
+            let reply = `Aqui estão os artigos mais recentes e relevantes sobre "${keywords}", ${name}:\n\n`;
+            newsData.forEach((item, index) => {
+                const numberedTitle = `${index + 1}. *${item.title}*\nPreview: ${item.preview}\nHora: ${item.time}\nFonte: ${item.source}\n\n`;
+                reply += numberedTitle;
+            });
+            message.reply(reply);
+            console.log('\nNEWS:', reply + '\n---------------------FIM---------------------\n');
         } else {
-          message.reply(`Nenhum artigo encontrado para "${keywords}".\n---------------------FIM---------------------\n`)
-          .then(sentMessage => {
-            // Delete the bot's message after 1 minute
-            deleteMessageAfterTimeout(sentMessage, 1 * 60 * 1000); // 5 minutes in milliseconds
-          });
+            message.reply(`Nenhum artigo encontrado para "${keywords}".\n---------------------FIM---------------------\n`)
+                .then(sentMessage => {
+                    // Delete the bot's message after 1 minute
+                    deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
+                });
         }
-      } catch (error) {
+    } catch (error) {
         console.error('An error occurred:', error);
         message.reply('Erro ao buscar por artigos.')
-        .then(sentMessage => {
-          // Delete the bot's message after 1 minutes
-          deleteMessageAfterTimeout(sentMessage, 1 * 60 * 1000); // 5 minutes in milliseconds
-        });  
-      }
+            .then(sentMessage => {
+                // Delete the bot's message after 1 minute
+                deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 1 minute in milliseconds
+            });
     }
+}
 
     ///////////////////////////Link Ayub Resumo////////////////////////
     if (contactName.includes('Ayub') && links && links.length > 0) {
@@ -488,11 +484,65 @@ client.on('message', async message => {
         message.reply('Eu não consegui acessar o link para fazer um resumo.')
         .then(sentMessage => {
           // Delete the bot's message after 5 minutes
-          deleteMessageAfterTimeout(sentMessage, 1 * 60 * 1000); // 5 minutes in milliseconds
+          deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
         });
       }
     }
 
+      ///////////////////////Respond to #////////////////
+      if (message.body.startsWith("#") && !message.body.includes("#sticker") && !message.body.includes("#ayubnews") && !message.body.includes("#?") && !message.body.includes("#resumopf")) {
+        console.log('\n---------------------PERGUNTA---------------------\nPERGUNTA:' + message.body.substring(1));
+  
+        const chat = await message.getChat();
+        const contact = await message.getContact();
+        const name = contact.name || 'Unknown';
+        await chat.sendStateTyping();
+  
+        let prompt = `${name} está perguntando: ${message.body.substring(1)}\n`;
+  
+        if (message.hasQuotedMsg) {
+          const quotedMessage = await message.getQuotedMessage();
+          console.log('CONTEXTO: ' + quotedMessage.body)
+          prompt += '\n\nPara contexto adicional, a conversa está se referindo a essa mensagem:' + quotedMessage.body + '\n';
+        }
+  
+        runCompletion(prompt)
+          .then(result => result.trim())
+          .then(result => {
+            console.log('\nRESPOSTA: ' + result + '\n---------------------FIM---------------------\n');
+            let colonIndex = result.indexOf(':');
+            let cleanedResult = colonIndex !== -1 && colonIndex <= 25 ? result.slice(colonIndex + 1).trim() : result;
+            return message.reply(cleanedResult);
+          })
+      }
+
+      if (inputLower[0] === '#?') {
+        console.log('---------------------COMMAND LIST---------------------\n');
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+    
+        const commandList = `
+Comandos disponíveis:
+*Sticker Resumo* - Resumo da última hora de mensagens (pode ser usado para resumir mensagens e links, se enviar como resposta à mensagem a ser resumida)
+*#resumo [número]* - Resumo das últimas [número] mensagens
+*Sticker Ayub News* - Notícias relevantes do dia 
+*#ayubnews [palavra-chave]* - Notícias sobre a palavra-chave
+*#ayubnews fut* - Notícias sobre futebol
+*#sticker [palavra-chave]* - Pesquisa uma imagem e transforma em sticker
+*@all* - Menciona todos os participantes do grupo
+*@admin* - Menciona todos os administradores do grupo
+*@medicos* - Menciona os médicos do grupo
+*@engenheiros* - Menciona os engenheiros do grupo
+*@cartola* - Menciona os jogadores de cartola do grupo
+*#?* - Lista de comandos disponíveis
+        `;
+    
+        message.reply(commandList)
+            .then(sentMessage => {
+                // Delete the bot's message after 5 minutes
+                deleteMessageAfterTimeout(sentMessage, 5 * 60 * 1000); // 5 minutes in milliseconds
+            });
+    }
     //////////////////////////TAGS/////////////////////////////
     if (message.body.toLowerCase().includes('@all') && !message.hasQuotedMsg) {
       let chat = await message.getChat();
@@ -830,31 +880,45 @@ client.on('message', async message => {
 });
 
 /////////////////////FUNCTIONS/////////////////////////
-// Function to scrape news from the website (fetches only the first 5 news)
 async function scrapeNews() {
   try {
-    const url = 'https://www.newsminimalist.com/';
-    const response = await axios.get(url);
-    const $ = cheerio.load(response.data);
-    const newsElements = $('article div.cursor-pointer.list-none.rounded.hover\\:bg-slate-100.dark\\:hover\\:bg-slate-800');
-    const news = [];
-    newsElements.each((index, element) => {
-      if (index < 5) {
-        const rawNewsText = $(element).find('div > div > span:nth-child(1)').text().trim();
-        const startIndex = rawNewsText.indexOf(']') + 1;
-        const newsText = rawNewsText.substring(startIndex).trim();
-        console.log('News text:', newsText);
-        news.push(newsText);
+      const url = 'https://www.newsminimalist.com/';
+      const response = await axios.get(url);
+      
+      if (response.status !== 200) {
+          console.error('Failed to load page');
+          return [];
       }
-    });
-    console.log('News array:', news);
-    return news;
+
+      const $ = cheerio.load(response.data);
+      const newsElements = $('div.mr-auto');
+
+      if (!newsElements.length) {
+          console.log('No news elements found');
+          return [];
+      }
+
+      const news = [];
+      newsElements.each((index, element) => {
+          if (index < 5) {
+              const headline = $(element).find('span').first().text().trim();
+              const source = $(element).find('span.text-xs.text-slate-400').text().trim();
+              console.log('Headline:', headline);
+              console.log('Source:', source);
+
+              news.push(`${headline} ${source}`);
+          }
+      });
+
+      console.log('News array:', news);
+      return news;
   } catch (error) {
-    console.error('An error occurred while scraping news:', error);
-    // Handle the error or log it, and return an empty array
-    return [];
+      console.error('An error occurred while scraping news:', error);
+      return [];
   }
 }
+
+module.exports = scrapeNews;
 
 // Function to translate the news to Portuguese using translate-google
 async function translateToPortuguese(news) {
@@ -1012,6 +1076,7 @@ async function getPageContent(url) {
   }
 }
 
+
 client.on('message_reaction', async (reaction) => {
   try {
       // Get the ID of the message that was reacted to
@@ -1112,34 +1177,66 @@ async function downloadImage(url) {
 
 async function deleteMessageAfterTimeout(sentMessage, timeout) {
   try {
-    setTimeout(async () => {
-      try {
-        // Fetch the chat using the getChat method from the Message class
-        const chat = await sentMessage.getChat();
-        
-        if (!chat) {
-          console.error('Failed to find the chat to delete the message');
-          return;
-        }
+      setTimeout(async () => {
+          try {
+              // Ensure sentMessage is properly defined
+              if (!sentMessage) {
+                  console.error('sentMessage is undefined or null');
+                  return;
+              }
 
-        // Fetch the latest messages from the chat
-        const messages = await chat.fetchMessages({ limit: 50 });
-        console.log(`Fetched ${messages.length} messages from the chat.`);
+              // Fetch the chat using the getChat method from the Message class
+              const chat = await sentMessage.getChat();
+              
+              if (!chat) {
+                  console.error('Failed to find the chat to delete the message');
+                  return;
+              }
 
-        // Find the specific message to delete
-        const messageToDelete = messages.find(msg => msg.id._serialized === sentMessage.id._serialized);
-        if (messageToDelete) {
-          await messageToDelete.delete(true);
-          console.log(`Deleted message: ${messageToDelete.body}`);
-        } else {
-          console.error('Failed to find the message to delete');
-        }
-      } catch (error) {
-        console.error('Failed to delete message:', error);
-      }
-    }, timeout);
+              // Fetch the latest messages from the chat
+              const messages = await chat.fetchMessages({ limit: 50 });
+              console.log(`Fetched ${messages.length} messages from the chat.`);
+
+              // Find the specific message to delete
+              const messageToDelete = messages.find(msg => msg.id._serialized === sentMessage.id._serialized);
+              if (messageToDelete) {
+                  await messageToDelete.delete(true);
+                  console.log(`Deleted message: ${messageToDelete.body}`);
+              } else {
+                  console.error('Failed to find the message to delete');
+              }
+          } catch (error) {
+              console.error('Failed to delete message:', error);
+          }
+      }, timeout);
   } catch (error) {
-    console.error('An error occurred in deleteMessageAfterTimeout:', error);
+      console.error('An error occurred in deleteMessageAfterTimeout:', error);
+  }
+}
+
+// Function to calculate and log the SHA-256 hash of a sticker
+async function calculateStickerHash(message) {
+  try {
+    if (message.hasMedia && message.type === 'sticker') {
+      const stickerData = await message.downloadMedia();
+
+      // Calculate the SHA-256 hash of the sticker image
+      const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+
+      console.log(`Sticker Hash: ${hash}`);
+
+      // Optionally, save the sticker image to a file for further inspection
+      const saveDirectory = __dirname + '/stickers'; // Replace with the desired save directory
+      if (!fs.existsSync(saveDirectory)) {
+        fs.mkdirSync(saveDirectory);
+      }
+      const stickerFileName = `${message.id.id}.webp`; // Use a unique name for each sticker
+      const savePath = `${saveDirectory}/${stickerFileName}`;
+      fs.writeFileSync(savePath, stickerData.data);
+      console.log(`Sticker saved at: ${savePath}`);
+    }
+  } catch (error) {
+    console.error('An error occurred while calculating the sticker hash:', error);
   }
 }
 
