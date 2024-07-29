@@ -1,15 +1,15 @@
 // dependencies.js
-// notifyAdmin,
-// runCompletion,
-// extractLinks,
-// unshortenLink,
-// getPageContent,
-// searchGoogleForImage,
-// downloadImage,
-// deleteFile,
-// scrapeNews,
-// translateToPortuguese,
-// scrapeNews2
+    // notifyAdmin,
+    // runCompletion,
+    // extractLinks,
+    // unshortenLink,
+    // getPageContent,
+    // searchGoogleForImage,
+    // downloadImage,
+    // deleteFile,
+    // scrapeNews,
+    // translateToPortuguese,
+    // scrapeNews2
 
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const fs = require('fs').promises;
