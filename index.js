@@ -104,8 +104,8 @@ function scheduleNextSummary() {
     setTimeout(() => {
         runPeriodicSummary().finally(scheduleNextSummary);
     }, delay);
-    console.log(`Next summary scheduled for ${console.log(brasiliaTime.getHours())}:00 (Brasilia Time)`);
-    notifyAdmin(`Next summary scheduled for ${console.log(brasiliaTime.getHours())}:00 (Brasilia Time)`).catch(console.error);
+    console.log(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
+    notifyAdmin(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
 }
 
 // Reconnect on disconnection
