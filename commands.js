@@ -180,7 +180,16 @@ async function handleAyubLinkSummary(message, links) {
 
     try {
         const unshortenedLink = await unshortenLink(link);
-        const pageContent = await getPageContent(unshortenedLink);
+        let pageContent = await getPageContent(unshortenedLink);
+        
+        // Use the character limit from the config file
+        const charLimit = config.LINK_SUMMARY_CHAR_LIMIT || 3000;
+        
+        // Limit the page content to the specified number of characters
+        if (pageContent.length > charLimit) {
+            pageContent = pageContent.substring(0, charLimit);
+        }
+        
         const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
         const summary = await runCompletion(prompt, 1);
         const sentMessage = await message.reply(summary);
