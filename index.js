@@ -4,8 +4,8 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { config, notifyAdmin } = require('./dependencies');
 const { setupListeners } = require('./listener');
-const { performCacheClearing, handleCorrenteResumoCommand } = require('./commands');
-const { scheduleSummary } = require('./periodicSummary');
+const { performCacheClearing } = require('./commands');
+const { runPeriodicSummary } = require('./periodicSummary');
 
 // Initialize global client
 global.client = null;
