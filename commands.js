@@ -91,7 +91,7 @@ async function handleResumoCommand(message, input) {
         .catch(error => console.error('Failed to send message:', error));
 }
 
-// Replace the existing handleCorrenteResumoCommand function in commands.js with this:
+// handleCorrenteResumoCommand function
 
 async function handleCorrenteResumoCommand(message, input) {
     console.log('handleCorrenteResumoCommand activated');
@@ -394,7 +394,7 @@ async function handleResumoSticker(message) {
             const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
             const summary = await runCompletion(prompt, 1);
             
-            await message.reply(replyMessage);
+            await message.reply(summary);
         } catch (error) {
             console.error('Error accessing link to generate summary:', error);
             await message.reply('Não consegui acessar o link para gerar um resumo.');
