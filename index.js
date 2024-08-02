@@ -4,8 +4,12 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { config, notifyAdmin } = require('./dependencies');
 const { setupListeners } = require('./listener');
-const { performCacheClearing } = require('./commands');
 const { runPeriodicSummary } = require('./periodicSummary');
+
+let cacheManagement;
+if (config.ENABLE_AUTOMATED_CACHE_CLEARING || config.ENABLE_STARTUP_CACHE_CLEARING) {
+    cacheManagement = require('./cacheManagement');
+}
 
 // Initialize global client
 global.client = null;
@@ -36,27 +40,6 @@ client.on('qr', qr => {
     qrcode.generate(qr, { small: true });
 });
 
-// Schedule cache clearing
-function scheduleCacheClearing() {
-    const now = new Date();
-    let nextClearTime = new Date(now);
-    nextClearTime.setHours(config.CACHE_CLEAR_HOUR, config.CACHE_CLEAR_MINUTE, 0, 0);
-    
-    // If the scheduled time has already passed today, schedule for tomorrow
-    if (nextClearTime <= now) {
-        nextClearTime.setDate(nextClearTime.getDate() + 1);
-    }
-
-    const timeUntilNextClear = nextClearTime.getTime() - now.getTime();
-
-    setTimeout(async () => {
-        await performCacheClearing();
-        scheduleCacheClearing(); // Schedule the next cache clearing
-    }, timeUntilNextClear);
-
-    console.log(`Next cache clearing scheduled for ${nextClearTime.toLocaleString()} (Local Time)`);
-}
-
 // Client ready event handler
 client.on('ready', async () => {
     console.log('Client is ready!');
@@ -69,14 +52,14 @@ client.on('ready', async () => {
         console.error("Failed to notify admin:", error);
     }
 
-    try {
-        await performCacheClearing();
-    } catch (error) {
-        console.error("Failed to clear cache:", error);
-        await notifyAdmin("Failed to clear cache: " + error.message).catch(console.error);
+    if (cacheManagement) {
+        if (config.ENABLE_STARTUP_CACHE_CLEARING) {
+            await cacheManagement.startupCacheClearing();
+        }
+        if (config.ENABLE_AUTOMATED_CACHE_CLEARING) {
+            cacheManagement.scheduleCacheClearing();
+        }
     }
-
-    scheduleCacheClearing();
     scheduleNextSummary(); // Schedule the periodic summary
 
     console.log("Bot initialization completed");
