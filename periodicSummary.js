@@ -4,7 +4,7 @@ const { handleCorrenteResumoCommand } = require('./commands');
 async function runPeriodicSummary() {
     console.log('Running periodic summary...');
     try {
-        const chats = await client.getChats();
+        const chats = await global.client.getChats();
         let chat;
         for (const c of chats) {
             if (c.isGroup && c.name === config.GROUP2_NAME) {
@@ -16,7 +16,10 @@ async function runPeriodicSummary() {
         if (chat) {
             if (chat.unreadCount > 0) {
                 console.log("Generating periodic summary for Group 2");
-                const summary = await handleCorrenteResumoCommand({ chat: chat, reply: chat.sendMessage.bind(chat) }, ['#resumo']);
+                const summary = await handleCorrenteResumoCommand({ 
+                    getChat: async () => chat,
+                    reply: chat.sendMessage.bind(chat)
+                }, ['#resumo']);
                 
                 if (summary && summary.trim() !== "Não houve doações ou pedidos nas últimas 3 horas.") {
                     await chat.sendMessage(summary);
