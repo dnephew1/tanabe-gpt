@@ -98,7 +98,7 @@ async function handleCorrenteResumoCommand(message, input) {
     const chat = await message.getChat();
     await chat.sendStateTyping();
 
-    const parts = message.body.split(' ');
+    const parts = message.body ? message.body.split(' ') : input;
     let limit = parseInt(parts[1]) || 0;
 
     let messages;
