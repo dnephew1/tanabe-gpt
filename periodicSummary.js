@@ -4,7 +4,7 @@ const { handleCorrenteResumoCommand } = require('./commands');
 async function runPeriodicSummary() {
     console.log('Running periodic summary...');
     try {
-        const chats = await global.client.getChats();
+        const chats = await client.getChats();
         let chat;
         for (const c of chats) {
             if (c.isGroup && c.name === config.GROUP2_NAME) {
