@@ -92,7 +92,6 @@ async function handleResumoCommand(message, input) {
 }
 
 // handleCorrenteResumoCommand function
-
 async function handleCorrenteResumoCommand(message, input) {
     console.log('handleCorrenteResumoCommand activated');
     const chat = await message.getChat();
@@ -131,17 +130,19 @@ async function handleCorrenteResumoCommand(message, input) {
     if (result.trim()) {
         await message.reply(result.trim());
         
-        // Notify admin about the manual command usage
-        const contact = await message.getContact();
-        const userName = contact.pushname || contact.name || contact.number;
-        await notifyAdmin(`Manual #resumo command used by ${userName} in ${chat.name}. Summary:\n\n${result.trim()}`);
+        // Notify admin about the summary
+        if (message.getContact) {
+            const contact = await message.getContact();
+            const userName = contact.pushname || contact.name || contact.number;
+            await notifyAdmin(`Summary generated for ${userName} in ${chat.name}. Summary:\n\n${result.trim()}`);
+        } else {
+            await notifyAdmin(`Periodic summary generated for ${chat.name}. Summary:\n\n${result.trim()}`);
+        }
         
         return result.trim(); // Return the summary
     } else {
         // Notify admin that no summary was generated
-        const contact = await message.getContact();
-        const userName = contact.pushname || contact.name || contact.number;
-        await notifyAdmin(`Manual #resumo command used by ${userName} in ${chat.name}, but no summary was generated (no content to summarize).`);
+        await notifyAdmin(`No summary was generated for ${chat.name} (no content to summarize).`);
     }
     
     return null; // Return null if no summary was generated

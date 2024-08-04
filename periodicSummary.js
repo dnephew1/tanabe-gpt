@@ -21,11 +21,8 @@ async function runPeriodicSummary() {
                     reply: chat.sendMessage.bind(chat)
                 }, ['#resumo']);
                 
-                if (summary && summary.trim() !== "Não houve doações ou pedidos nas últimas 3 horas.") {
+                if (summary) {
                     await chat.sendMessage(summary);
-                    await notifyAdmin(`Periodic summary sent to Group 2:\n\n${summary}`);
-                } else {
-                    await notifyAdmin("No periodic summary was sent to Group 2 (no content to summarize).");
                 }
 
                 // Mark messages as read
