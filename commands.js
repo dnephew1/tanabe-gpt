@@ -476,7 +476,6 @@ async function handleAyubNewsSearch(message, input) {
 
 module.exports = {
     handleResumoCommand,
-    handleCorrenteResumoCommand,
     handleStickerMessage,
     handleAyubNewsCommand,
     handleAyubLinkSummary,
