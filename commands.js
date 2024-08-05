@@ -91,63 +91,6 @@ async function handleResumoCommand(message, input) {
         .catch(error => console.error('Failed to send message:', error));
 }
 
-// handleCorrenteResumoCommand function
-async function handleCorrenteResumoCommand(message, input) {
-    console.log('handleCorrenteResumoCommand activated');
-    const chat = await message.getChat();
-    await chat.sendStateTyping();
-
-    const parts = message.body ? message.body.split(' ') : input;
-    let limit = parseInt(parts[1]) || 0;
-
-    let messages;
-    if (isNaN(limit) || limit <= 0) {
-        messages = await chat.fetchMessages({ limit: 500 });
-        const lastMessage = messages[messages.length - 2];
-        const lastMessageTimestamp = lastMessage.timestamp;
-        const threeHoursBeforeLastMessageTimestamp = lastMessageTimestamp - 10800;
-        messages = messages.slice(0, -1).filter(message => (
-            message.timestamp > threeHoursBeforeLastMessageTimestamp &&
-            !message.fromMe &&
-            message.body.trim() !== ''
-        ));
-    } else {
-        messages = await chat.fetchMessages({ limit: limit + 1 });
-        messages = messages.slice(0, -1).filter(message => (
-            !message.fromMe &&
-            message.body.trim() !== ''
-        ));
-    }
-
-    const messageTexts = await Promise.all(messages.map(async message => {
-        const contact = await message.getContact();
-        const name = contact.pushname || contact.name || contact.number;
-        return `>>${name}: ${message.body}.\n`;
-    }));
-
-    const result = await runCompletion(messageTexts.join(' '), 2);
-    
-    if (result.trim()) {
-        await message.reply(result.trim());
-        
-        // Notify admin about the summary
-        if (message.getContact) {
-            const contact = await message.getContact();
-            const userName = contact.pushname || contact.name || contact.number;
-            await notifyAdmin(`Summary generated for ${userName} in ${chat.name}. Summary:\n\n${result.trim()}`);
-        } else {
-            await notifyAdmin(`Periodic summary generated for ${chat.name}. Summary:\n\n${result.trim()}`);
-        }
-        
-        return result.trim(); // Return the summary
-    } else {
-        // Notify admin that no summary was generated
-        await notifyAdmin(`No summary was generated for ${chat.name} (no content to summarize).`);
-    }
-    
-    return null; // Return null if no summary was generated
-}
-
 async function handleStickerMessage(message) {
     const stickerData = await message.downloadMedia();
     const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');

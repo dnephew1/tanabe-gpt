@@ -3,7 +3,6 @@
 const { config, extractLinks, notifyAdmin } = require('./dependencies');
 const {
     handleResumoCommand,
-    handleCorrenteResumoCommand,
     handleStickerMessage,
     handleAyubNewsCommand,
     handleAyubLinkSummary,
@@ -12,6 +11,7 @@ const {
     handleStickerCreation,
     handleCacheClearCommand
 } = require('./commands');
+const { handleCorrenteResumoCommand } = require('./periodicSummary');
 
 function setupListeners(client) {
     // Handle incoming messages
@@ -23,7 +23,7 @@ function setupListeners(client) {
             const contactName = contact.pushname || contact.name || contact.number;
             const input = messageBody.split(' ');
             const inputLower = input.map(item => item.toLowerCase());
-            const isGroup1 = chat.name === config.GROUP1_NAME;
+            const isGroup1 = chat.name === config.GROUP1_NAMsE;
             const isGroup2 = chat.name === config.GROUP2_NAME;
             const isAdminChat = message.from === `${config.ADMIN_NUMBER}@c.us`;
             
@@ -87,14 +87,6 @@ async function handleGroup1Commands(message, inputLower, input, contactName, isG
         }
     }
 
-    return false;
-}
-
-async function handleGroup2Commands(message, inputLower, input) {
-    if (inputLower[0].startsWith('#resumo')) {
-        await handleCorrenteResumoCommand(message, input);
-        return true;
-    }
     return false;
 }
 
@@ -183,6 +175,14 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
         mentions,
         quotedMessageId
     });
+}
+
+async function handleGroup2Commands(message, inputLower, input) {
+    if (inputLower[0].startsWith('#resumo')) {
+        await handleCorrenteResumoCommand(message, input);
+        return true;
+    }
+    return false;
 }
 
 module.exports = {
