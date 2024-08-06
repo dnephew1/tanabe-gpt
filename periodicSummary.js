@@ -4,7 +4,7 @@ async function runPeriodicSummary() {
     console.log('Running periodic summary...');
     const chats = await client.getChats();
     for (const chat of chats) {
-        if (chat.isGroup && chat.name === group2Name) {
+        if (chat.isGroup && chat.name === config.GROUP2_NAME) {
             if (chat.unreadCount > 0) {
                 const messages = await chat.fetchMessages({ limit: chat.unreadCount });
                 const messageTexts = (await Promise.all(messages.map(async message => {

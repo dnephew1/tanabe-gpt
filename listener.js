@@ -23,7 +23,7 @@ function setupListeners(client) {
             const contactName = contact.pushname || contact.name || contact.number;
             const input = messageBody.split(' ');
             const inputLower = input.map(item => item.toLowerCase());
-            const isGroup1 = chat.name === config.GROUP1_NAMsE;
+            const isGroup1 = chat.name === config.GROUP1_NAME;
             const isGroup2 = chat.name === config.GROUP2_NAME;
             const isAdminChat = message.from === `${config.ADMIN_NUMBER}@c.us`;
             
