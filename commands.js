@@ -312,18 +312,18 @@ async function handleResumoSticker(message) {
         const result = await runCompletion(prompt, 1);
         await message.reply(result.trim());
     } else {
-        // Summarize the last hour of messages
-        console.log('hourSummary activated');
-        const messages = await chat.fetchMessages({ limit: 500 });
-        const oneHourAgo = Date.now() - 3600 * 1000;
-        const messagesLastHour = messages.filter(m => m.timestamp * 1000 > oneHourAgo && !m.fromMe && m.body.trim() !== '');
+        // Summarize the last three hours of messages
+        console.log('threehourSummary activated');
+        const messages = await chat.fetchMessages({ limit: 1000 });
+        const threeHoursAgo = Date.now() - 3 * 3600 * 1000;
+        const messagesLastThreeHours = messages.filter(m => m.timestamp * 1000 > threeHoursAgo && !m.fromMe && m.body.trim() !== '');
 
-        if (messagesLastHour.length === 0) {
+        if (messagesLastThreeHours.length === 0) {
             await message.reply('Não há mensagens suficientes para gerar um resumo.');
             return;
         }
 
-        const messageTexts = await Promise.all(messagesLastHour.map(async msg => {
+        const messageTexts = await Promise.all(messagesLastThreeHours.map(async msg => {
             const contact = await msg.getContact();
             const name = contact.name || 'Unknown';
             return `>>${name}: ${msg.body}.\n`;
