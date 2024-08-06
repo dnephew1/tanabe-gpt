@@ -17,8 +17,7 @@ const {
     parseXML,
     getRelativeTime
 } = require('./dependencies');
-const fs = require('fs').promises;
-const path = require('path');
+const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
 
 // Helper function to delete messages after a timeout
@@ -263,44 +262,6 @@ async function handleStickerCreation(message) {
     }
 }
 
-// Function to clear WhatsApp Web cache
-async function clearWhatsAppCache() {
-    const cacheDir = path.join(__dirname, '.wwebjs_cache');
-    
-    if (await fs.access(cacheDir).then(() => true).catch(() => false)) {
-        try {
-            await fs.rm(cacheDir, { recursive: true, force: true });
-            console.log('WhatsApp Web cache cleared successfully');
-        } catch (err) {
-            console.error('Error clearing WhatsApp Web cache:', err);
-        }
-    }
-}
-
-// Function to clear Puppeteer's cache
-async function clearPuppeteerCache() {
-    if (global.client && global.client.pupBrowser) {
-        try {
-            const pages = await global.client.pupBrowser.pages();
-            for (let i = 1; i < pages.length; i++) {
-                await pages[i].close();
-            }
-            console.log('Puppeteer cache cleared successfully');
-        } catch (error) {
-            console.error('Error clearing Puppeteer cache:', error);
-        }
-    }
-}
-
-// Function to perform cache clearing
-async function performCacheClearing() {
-    console.log('Starting cache clearing process...');
-    await clearWhatsAppCache();
-    await clearPuppeteerCache();
-    console.log('Cache clearing process completed');
-    await notifyAdmin("Cache clearing process completed");
-}
-
 // Handle manual cache clear command
 async function handleCacheClearCommand(message) {
     if (message.from === `${config.ADMIN_NUMBER}@c.us`) {
@@ -483,7 +444,6 @@ module.exports = {
     handleCommandList,
     handleStickerCreation,
     deleteMessageAfterTimeout,
-    performCacheClearing,
     handleCacheClearCommand,
     handleResumoSticker,
     handleAyubNewsSticker,
