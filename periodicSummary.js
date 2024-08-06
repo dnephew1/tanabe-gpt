@@ -1,3 +1,4 @@
+//Integrated into index.js, listener.js
 const { config, notifyAdmin } = require('./dependencies');
 
 async function runPeriodicSummary() {

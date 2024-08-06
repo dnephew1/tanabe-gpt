@@ -101,7 +101,7 @@ process.on('uncaughtException', (error) => {
     process.exit(1);
 });
 
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 function scheduleNextSummary() {
     // Get current time in Brasilia
     const brasiliaTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
@@ -126,6 +126,7 @@ function scheduleNextSummary() {
     }, delay);
     console.log(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Initialize the client
 client.initialize();
