@@ -65,32 +65,6 @@ client.on('ready', async () => {
     console.log("Bot initialization completed");
 });
 
-function scheduleNextSummary() {
-    // Get current time in Brasilia
-    const brasiliaTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
-    brasiliaTime.setSeconds(0, 0);
-    const currentHour = brasiliaTime.getHours();
-
-    // Find next run time in Brasilia time
-    let nextRunTime = new Date(brasiliaTime);
-    const nextHour = config.SUMMARY_TIMES.find(hour => hour > currentHour) || config.SUMMARY_TIMES[0];
-    nextRunTime.setHours(nextHour, 0, 0, 0);
-
-    if (nextHour <= currentHour) {
-        nextRunTime.setDate(nextRunTime.getDate() + 1);
-    }
-
-    // Calculate delay in milliseconds
-    const now = new Date();
-    const delay = nextRunTime.getTime() - brasiliaTime.getTime();
-
-    setTimeout(() => {
-        runPeriodicSummary().finally(scheduleNextSummary);
-    }, delay);
-    console.log(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
-    notifyAdmin(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
-}
-
 // Reconnect on disconnection
 let reconnectAttempts = 0;
 
@@ -126,6 +100,32 @@ process.on('uncaughtException', (error) => {
     notifyAdmin(`Uncaught Exception: ${error.message}`).catch(console.error);
     process.exit(1);
 });
+
+
+function scheduleNextSummary() {
+    // Get current time in Brasilia
+    const brasiliaTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
+    brasiliaTime.setSeconds(0, 0);
+    const currentHour = brasiliaTime.getHours();
+
+    // Find next run time in Brasilia time
+    let nextRunTime = new Date(brasiliaTime);
+    const nextHour = config.SUMMARY_TIMES.find(hour => hour > currentHour) || config.SUMMARY_TIMES[0];
+    nextRunTime.setHours(nextHour, 0, 0, 0);
+
+    if (nextHour <= currentHour) {
+        nextRunTime.setDate(nextRunTime.getDate() + 1);
+    }
+
+    // Calculate delay in milliseconds
+    const now = new Date();
+    const delay = nextRunTime.getTime() - brasiliaTime.getTime();
+
+    setTimeout(() => {
+        runPeriodicSummary().finally(scheduleNextSummary);
+    }, delay);
+    console.log(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
+}
 
 // Initialize the client
 client.initialize();
