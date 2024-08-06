@@ -37,10 +37,11 @@ function setupListeners(client) {
                 commandHandled = true;
             } else if (isGroup1 || isAdminChat) {
                 commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+////////////////////////////////////////////////////////////////////////////////////////////////////////
             } else if (isGroup2) {
                 commandHandled = await handleGroup2Commands(message, inputLower, input);
             }
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////
             // Handle mentions/tags
             if (!commandHandled && message.body.includes('@')) {
                 await handleTags(message, chat);
@@ -177,6 +178,7 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
     });
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 async function handleGroup2Commands(message, inputLower, input) {
     if (inputLower[0].startsWith('#resumo')) {
         await handleCorrenteResumoCommand(message, input);
@@ -184,6 +186,7 @@ async function handleGroup2Commands(message, inputLower, input) {
     }
     return false;
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 module.exports = {
     setupListeners
