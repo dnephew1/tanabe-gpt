@@ -64,7 +64,7 @@ async function runCompletion(prompt, group) {
                 { role: 'system', content: 'You are a WhatsApp group assistant.' },
                 { role: 'user', content: completePrompt }
             ],
-            model: 'gpt-4',
+            model: 'gpt-4o',
         });
         return completion.choices[0].message.content;
     } catch (error) {
@@ -81,7 +81,7 @@ function extractLinks(messageText) {
 
 // Function to unshorten a link
 async function unshortenLink(link) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const options = {
             method: 'HEAD',
             timeout: 5000,
