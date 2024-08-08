@@ -3,3 +3,4 @@ node_modules
 .wwebjs_auth
 backup_index.js
 package-lock.json
+commands.txt
