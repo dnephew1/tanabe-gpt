@@ -15,8 +15,11 @@ async function runPeriodicSummary() {
                 }))).join(' ');
 
                 if (messageTexts) {
-                    const summary = await runCompletion(messageTexts, 2);
-                    if (summary.trim() !== "Não houve doações ou pedidos nas últimas 3 horas.") {
+                    const summary = await handleCorrenteResumoCommand({ 
+                        getChat: async () => chat,
+                        reply: chat.sendMessage.bind(chat)
+                    }, ['#resumo']);
+                        if (summary.trim() !== "Não houve doações ou pedidos nas últimas 3 horas.") {
                         await chat.sendMessage(summary);
                         await notifyAdmin(`Summary sent to Group 2: ${summary}`);
                     } else {
