@@ -29,14 +29,17 @@ function setupListeners(client) {
             
             let commandHandled = false;
 
-            console.log(`Received message from ${contactName} in ${chat.name}: ${messageBody}`);
+            console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
 
             // Handle commands
             if (messageBody === '!clearcache' && isAdminChat) {
                 await handleCacheClearCommand(message);
                 commandHandled = true;
-            } else if (isGroup1 || isAdminChat) {
-                commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+            } else if (isGroup1 || isAdminChat || !chat.isGroup) {
+                commandHandled = await handleCommonCommands(message, inputLower, input);
+                if (!commandHandled && (isGroup1 || isAdminChat)) {
+                    commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+                }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
             } else if (isGroup2) {
                 commandHandled = await handleGroup2Commands(message, inputLower, input);
@@ -56,14 +59,26 @@ function setupListeners(client) {
     client.on('message_reaction', handleMessageReaction);
 }
 
-async function handleGroup1Commands(message, inputLower, input, contactName, isGroup1) {
+//Commands allowed universally
+async function handleCommonCommands(message, inputLower, input) {
     if (message.hasMedia && message.type === 'sticker') {
         await handleStickerMessage(message);
         return true;
     } else if (inputLower[0].startsWith('#sticker')) {
         await handleStickerCreation(message);
         return true;
-    } else if (inputLower[0].startsWith('#resumo')) {
+    }
+    return false;
+}
+
+//Group1 commands
+async function handleGroup1Commands(message, inputLower, input, contactName, isGroup1) {
+    if (await handleCommonCommands(message, inputLower, input)) {
+        return true;
+    }
+
+    // Rest of the Group 1 specific commands
+    if (inputLower[0].startsWith('#resumo')) {
         await handleResumoCommand(message, input);
         return true;
     } else if (inputLower[0].startsWith('#ayubnews')) {
