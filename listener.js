@@ -3,12 +3,12 @@
 const { config, extractLinks, notifyAdmin } = require('./dependencies');
 const {
     handleResumoCommand,
-    handleStickerMessage,
     handleAyubNewsCommand,
-    handleAyubLinkSummary,
-    handleHashTagCommand,
     handleCommandList,
-    handleStickerCreation,
+    handleHashTagCommand,
+    handleDesenhoCommand,
+    handleStickerMessage,
+    handleAyubLinkSummary,
     handleCacheClearCommand
 } = require('./commands');
 const { handleCorrenteResumoCommand } = require('./periodicSummary');
@@ -86,6 +86,9 @@ async function handleGroup1Commands(message, inputLower, input, contactName, isG
         return true;
     } else if (inputLower[0] === '#?') {
         await handleCommandList(message);
+        return true;
+    } else if (inputLower[0].startsWith('#desenho')) {
+        await handleDesenhoCommand(message, input);
         return true;
     } else if (message.body.startsWith('#')) {
         await handleHashTagCommand(message);
