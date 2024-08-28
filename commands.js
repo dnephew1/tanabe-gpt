@@ -20,6 +20,8 @@ const {
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs').promises;
 
 // Helper function to delete messages after a timeout
 const messageQueue = [];
@@ -219,17 +221,73 @@ Comandos disponíveis:
 }
 
 async function handleStickerCreation(message) {
-    const quotedMessage = await message.getQuotedMessage();
-    if (quotedMessage && quotedMessage.hasMedia) {
-        const media = await quotedMessage.downloadMedia();
-        if (media) {
-            const chat = await message.getChat();
-            await chat.sendMessage(media, { sendMediaAsSticker: true });
-            return true;
+    console.log('handleStickerCreation activated');
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+
+    if (message.hasMedia) {
+        const attachmentData = await message.downloadMedia();
+        message.reply(attachmentData, message.from, { sendMediaAsSticker: true });
+    } else if (message.hasQuotedMsg) {
+        const quotedMsg = await message.getQuotedMessage();
+        if (quotedMsg.hasMedia) {
+            const attachmentData = await quotedMsg.downloadMedia();
+            const imagePath = path.join(__dirname, `quoted_image_${Date.now()}.jpg`);
+            
+            try {
+                await fs.writeFile(imagePath, attachmentData.data, 'base64');
+                const imageAsSticker = MessageMedia.fromFilePath(imagePath);
+                await message.reply(imageAsSticker, message.from, { sendMediaAsSticker: true });
+            } catch (error) {
+                console.error('Error processing quoted image:', error);
+                message.reply('Ocorreu um erro ao processar a imagem citada.')
+                    .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                    .catch(error => console.error('Failed to send error message:', error));
+            } finally {
+                // Delete the file after sending or if an error occurred
+                await deleteFile(imagePath);
+            }
+        } else {
+            message.reply('A mensagem citada não contém uma imagem.')
+                .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                .catch(error => console.error('Failed to send message:', error));
+        }
+    } else {
+        const query = message.body.slice(9).trim();
+        if (query && /\S/.test(query)) {
+            try {
+                const imageUrl = await searchGoogleForImage(query);
+                if (imageUrl) {
+                    const imagePath = await downloadImage(imageUrl);
+                    if (imagePath) {
+                        const imageAsSticker = MessageMedia.fromFilePath(imagePath);
+                        await global.client.sendMessage(message.from, imageAsSticker, {
+                            sendMediaAsSticker: true
+                        });
+                        // Delete the file after sending
+                        await deleteFile(imagePath);
+                    } else {
+                        message.reply('Falha ao baixar a imagem para o sticker.')
+                            .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                            .catch(error => console.error('Failed to send message:', error));
+                    }
+                } else {
+                    message.reply('Nenhuma imagem encontrada para a consulta fornecida.')
+                        .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                        .catch(error => console.error('Failed to send message:', error));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                message.reply('Ocorreu um erro ao processar sua solicitação.')
+                    .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                    .catch(error => console.error('Failed to send message:', error));
+            }
+        } else {
+            message.reply('Por favor, forneça uma palavra-chave após #sticker ou cite uma mensagem com uma imagem.')
+                .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                .catch(error => console.error('Failed to send message:', error));
         }
     }
-    await message.reply('Please reply to an image with #sticker to create a sticker.');
-    return false;
 }
 
 // Handle manual cache clear command
