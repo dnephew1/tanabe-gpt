@@ -9,7 +9,8 @@ const {
     handleDesenhoCommand,
     handleStickerMessage,
     handleAyubLinkSummary,
-    handleCacheClearCommand
+    handleCacheClearCommand,
+    handleStickerCreation
 } = require('./commands');
 const { handleCorrenteResumoCommand } = require('./periodicSummary');
 
