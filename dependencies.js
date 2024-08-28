@@ -321,6 +321,21 @@ function getRelativeTime(date) {
     return `${diffInDays} dias atrás`;
 }
 
+async function generateImage(prompt) {
+    try {
+        const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+        });
+        return response.data[0].url;
+    } catch (error) {
+        console.error('Error generating image:', error);
+        return null;
+    }
+}
+
 module.exports = {
     Client,
     LocalAuth,
@@ -349,5 +364,6 @@ module.exports = {
     translateToPortuguese,
     scrapeNews2,
     parseXML,
-    getRelativeTime
+    getRelativeTime,
+    generateImage
 };

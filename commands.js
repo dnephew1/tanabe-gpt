@@ -15,7 +15,8 @@ const {
     translateToPortuguese,
     scrapeNews2,
     parseXML,
-    getRelativeTime
+    getRelativeTime,
+    generateImage
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
@@ -204,6 +205,7 @@ Comandos disponíveis:
 *@engenheiros* - Menciona os engenheiros no grupo
 *@cartola* - Menciona os jogadores de Cartola do grupo
 *#?* - Lista de comandos disponíveis
+*#desenho [descrição]* - Gera uma imagem com base na descrição fornecida (apenas para grupo1)
 *!clearcache* - (Apenas para admin) Limpa o cache do bot
     `;
 
@@ -291,9 +293,7 @@ async function handleResumoSticker(message) {
     }
 
     if (linkToSummarize) {
-        // Summarize the link
         try {
-            console.log('linkSummary activated');
             const unshortenedLink = await unshortenLink(linkToSummarize);
             const pageContent = await getPageContent(unshortenedLink);
             const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
@@ -301,19 +301,15 @@ async function handleResumoSticker(message) {
             
             await message.reply(summary);
         } catch (error) {
-            console.error('Error accessing link to generate summary:', error);
             await message.reply('Não consegui acessar o link para gerar um resumo.');
         }
     } else if (quotedMessage) {
-        // Summarize the quoted message
         const prompt = config.PROMPTS.HOUR_SUMMARY
             .replace('{name}', 'User')
             .replace('{messageTexts}', quotedMessage.body);
         const result = await runCompletion(prompt, 1);
         await message.reply(result.trim());
     } else {
-        // Summarize the last three hours of messages
-        console.log('threehourSummary activated');
         const messages = await chat.fetchMessages({ limit: 1000 });
         const threeHoursAgo = Date.now() - 3 * 3600 * 1000;
         const messagesLastThreeHours = messages.filter(m => m.timestamp * 1000 > threeHoursAgo && !m.fromMe && m.body.trim() !== '');
@@ -435,6 +431,34 @@ async function handleAyubNewsSearch(message, input) {
     }
 }
 
+async function handleDesenhoCommand(message, input) {
+    console.log('handleDesenhoCommand activated');
+    const chat = await message.getChat();
+    await chat.sendStateTyping();
+
+    const prompt = input.slice(1).join(' ');
+    if (!prompt) {
+        message.reply('Por favor, forneça uma descrição após #desenho.')
+            .catch(error => console.error('Failed to send message:', error));
+        return;
+    }
+
+    try {
+        const imageUrl = await generateImage(prompt);
+        if (imageUrl) {
+            const media = await MessageMedia.fromUrl(imageUrl);
+            await message.reply(media);
+        } else {
+            message.reply('Não foi possível gerar a imagem. Tente novamente.')
+                .catch(error => console.error('Failed to send message:', error));
+        }
+    } catch (error) {
+        console.error('Error in handleDesenhoCommand:', error);
+        message.reply('Ocorreu um erro ao gerar a imagem. Tente novamente mais tarde.')
+            .catch(error => console.error('Failed to send message:', error));
+    }
+}
+
 module.exports = {
     handleResumoCommand,
     handleStickerMessage,
@@ -448,5 +472,6 @@ module.exports = {
     handleResumoSticker,
     handleAyubNewsSticker,
     handleAyubNewsFut,
-    handleAyubNewsSearch
+    handleAyubNewsSearch,
+    handleDesenhoCommand
 };
