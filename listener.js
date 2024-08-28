@@ -65,9 +65,8 @@ async function handleCommonCommands(message, inputLower, input) {
     if (message.hasMedia && message.type === 'sticker') {
         await handleStickerMessage(message);
         return true;
-    } else if (inputLower[0].startsWith('#sticker')) {
-        await handleStickerCreation(message);
-        return true;
+    } else if (inputLower[0] === '#sticker') {
+        return await handleStickerCreation(message);
     }
     return false;
 }
