@@ -470,9 +470,9 @@ async function handleDesenhoCommand(message, input) {
     }
 
     try {
-        const imageUrl = await generateImage(prompt);
-        if (imageUrl) {
-            const media = await MessageMedia.fromUrl(imageUrl);
+        const imageBase64 = await generateImage(prompt);
+        if (imageBase64) {
+            const media = new MessageMedia('image/png', imageBase64, 'generated_image.png');
             await message.reply(media);
         } else {
             message.reply('Não foi possível gerar a imagem. Tente novamente.')

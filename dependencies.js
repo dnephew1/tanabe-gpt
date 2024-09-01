@@ -323,15 +323,20 @@ function getRelativeTime(date) {
 
 async function generateImage(prompt) {
     try {
-        const response = await openai.images.generate({
-            model: "dall-e-3",
+        const response = await axios.post('https://api.getimg.ai/v1/essential-v2/text-to-image', {
             prompt: prompt,
-            n: 1,
-            size: "1024x1024",
+            style: 'photorealism',
+            aspect_ratio: '1:1',
+            output_format: 'png'
+        }, {
+            headers: {
+                'Authorization': `Bearer ${config.GETIMG_AI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
         });
-        return response.data[0].url;
+        return response.data.image;
     } catch (error) {
-        console.error('Error generating image:', error);
+        console.error('Error generating image:', error.response ? error.response.data : error.message);
         return null;
     }
 }
