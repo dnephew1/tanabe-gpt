@@ -16,7 +16,8 @@ const {
     scrapeNews2,
     parseXML,
     getRelativeTime,
-    generateImage
+    generateImage,
+    improvePrompt
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
@@ -208,6 +209,7 @@ Comandos disponíveis:
 *@cartola* - Menciona os jogadores de Cartola do grupo
 *#?* - Lista de comandos disponíveis
 *#desenho [descrição]* - Gera uma imagem com base na descrição fornecida (apenas para grupo1)
+*#desenho! [descrição]* - Gera uma imagem com base na descrição fornecida sem melhoria (apenas para grupo1)
 *!clearcache* - (Apenas para admin) Limpa o cache do bot
     `;
 
@@ -457,23 +459,29 @@ async function handleAyubNewsSearch(message, input) {
     }
 }
 
-async function handleDesenhoCommand(message, input) {
+async function handleDesenhoCommand(message, command, promptInput) {
     console.log('handleDesenhoCommand activated');
     const chat = await message.getChat();
     await chat.sendStateTyping();
 
-    const prompt = input.slice(1).join(' ');
-    if (!prompt) {
-        message.reply('Por favor, forneça uma descrição após #desenho.')
+    if (!promptInput) {
+        message.reply('Por favor, forneça uma descrição após #desenho ou #desenho!.')
             .catch(error => console.error('Failed to send message:', error));
         return;
     }
 
+    let finalPrompt;
+    if (command === '#desenho!') {
+        finalPrompt = promptInput;
+    } else {
+        finalPrompt = await improvePrompt(promptInput);
+    }
+
     try {
-        const imageBase64 = await generateImage(prompt);
+        const imageBase64 = await generateImage(finalPrompt);
         if (imageBase64) {
             const media = new MessageMedia('image/png', imageBase64, 'generated_image.png');
-            await message.reply(media);
+            await message.reply(media, null, { caption: `Prompt: ${finalPrompt}` });
         } else {
             message.reply('Não foi possível gerar a imagem. Tente novamente.')
                 .catch(error => console.error('Failed to send message:', error));
