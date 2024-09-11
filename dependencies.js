@@ -321,13 +321,14 @@ function getRelativeTime(date) {
     return `${diffInDays} dias atrás`;
 }
 
-async function generateImage(prompt) {
+async function generateImage(prompt, cfg_scale = 7) {
     try {
         const response = await axios.post('https://api.getimg.ai/v1/essential-v2/text-to-image', {
             prompt: prompt,
             style: 'photorealism',
             aspect_ratio: '1:1',
-            output_format: 'png'
+            output_format: 'png',
+            cfg_scale: cfg_scale
         }, {
             headers: {
                 'Authorization': `Bearer ${config.GETIMG_AI_API_KEY}`,
@@ -339,6 +340,12 @@ async function generateImage(prompt) {
         console.error('Error generating image:', error.response ? error.response.data : error.message);
         return null;
     }
+}
+
+async function improvePrompt(prompt) {
+    const improvePromptTemplate = config.PROMPTS.IMPROVE_IMAGE_PROMPT;
+    const improvedPrompt = await runCompletion(improvePromptTemplate.replace('{prompt}', prompt), 1);
+    return improvedPrompt.trim();
 }
 
 module.exports = {
@@ -370,5 +377,6 @@ module.exports = {
     scrapeNews2,
     parseXML,
     getRelativeTime,
-    generateImage
+    generateImage,
+    improvePrompt
 };
