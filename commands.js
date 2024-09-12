@@ -209,7 +209,6 @@ Comandos disponíveis:
 *@cartola* - Menciona os jogadores de Cartola do grupo
 *#?* - Lista de comandos disponíveis
 *#desenho [descrição]* - Gera uma imagem com base na descrição fornecida (apenas para grupo1)
-*#desenho! [descrição]* - Gera uma imagem com base na descrição fornecida sem melhoria (apenas para grupo1)
 *!clearcache* - (Apenas para admin) Limpa o cache do bot
     `;
 
@@ -465,30 +464,35 @@ async function handleDesenhoCommand(message, command, promptInput) {
     await chat.sendStateTyping();
 
     if (!promptInput) {
-        message.reply('Por favor, forneça uma descrição após #desenho ou #desenho!.')
+        message.reply('Por favor, forneça uma descrição após #desenho.')
             .catch(error => console.error('Failed to send message:', error));
         return;
     }
 
-    let finalPrompt;
-    if (command === '#desenho!') {
-        finalPrompt = promptInput;
-    } else {
-        finalPrompt = await improvePrompt(promptInput);
-    }
-
     try {
-        const imageBase64 = await generateImage(finalPrompt);
-        if (imageBase64) {
-            const media = new MessageMedia('image/png', imageBase64, 'generated_image.png');
-            await message.reply(media);
+        const improvedPrompt = await improvePrompt(promptInput);
+        console.log('Improved prompt:', improvedPrompt);
+
+        const originalImageBase64 = await generateImage(promptInput);
+        const improvedImageBase64 = await generateImage(improvedPrompt);
+
+        if (originalImageBase64 && improvedImageBase64) {
+            const originalMedia = new MessageMedia('image/png', originalImageBase64, 'original_image.png');
+            const improvedMedia = new MessageMedia('image/png', improvedImageBase64, 'improved_image.png');
+
+            await message.reply(originalMedia, null, { caption: 'Imagem original' });
+            await message.reply(improvedMedia, null, { caption: 'Imagem melhorada' });
+
+            // Delete the images after sending
+            await deleteFile('original_image.png');
+            await deleteFile('improved_image.png');
         } else {
-            message.reply('Não foi possível gerar a imagem. Tente novamente.')
+            message.reply('Não foi possível gerar as imagens. Tente novamente.')
                 .catch(error => console.error('Failed to send message:', error));
         }
     } catch (error) {
         console.error('Error in handleDesenhoCommand:', error);
-        message.reply('Ocorreu um erro ao gerar a imagem. Tente novamente mais tarde.')
+        message.reply('Ocorreu um erro ao gerar as imagens. Tente novamente mais tarde.')
             .catch(error => console.error('Failed to send message:', error));
     }
 }
