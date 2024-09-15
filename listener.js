@@ -90,6 +90,9 @@ async function handleGroup1Commands(message, inputLower, input, contactName, isG
     } else if (inputLower[0] === '#desenho') {
         await handleDesenhoCommand(message, inputLower[0], input.slice(1).join(' '));
         return true;
+    } else if (inputLower[0] === '#sticker') {
+        await handleStickerCreation(message);
+        return true;
     } else if (message.body.startsWith('#')) {
         await handleHashTagCommand(message);
         return true;

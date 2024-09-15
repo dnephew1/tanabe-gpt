@@ -480,8 +480,8 @@ async function handleDesenhoCommand(message, command, promptInput) {
             const originalMedia = new MessageMedia('image/png', originalImageBase64, 'original_image.png');
             const improvedMedia = new MessageMedia('image/png', improvedImageBase64, 'improved_image.png');
 
-            await message.reply(originalMedia, null, { caption: 'Imagem original' });
-            await message.reply(improvedMedia, null, { caption: 'Imagem melhorada' });
+            await message.reply(originalMedia);
+            await message.reply(improvedMedia);
 
             // Delete the images after sending
             await deleteFile('original_image.png');
