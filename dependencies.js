@@ -64,7 +64,7 @@ async function runCompletion(prompt, group) {
                 { role: 'system', content: 'You are a WhatsApp group assistant.' },
                 { role: 'user', content: completePrompt }
             ],
-            model: 'gpt-4o',
+            model: 'gpt-4o-mini',
         });
         return completion.choices[0].message.content;
     } catch (error) {
