@@ -315,28 +315,28 @@ async function handleResumoSticker(message) {
         const links = extractLinks(quotedText);
 
         if (links.length > 0) {
-            linkToSummarize = links[0];
+            // Case 1: Quoted message contains a link - summarize link content
+            try {
+                const unshortenedLink = await unshortenLink(links[0]);
+                const pageContent = await getPageContent(unshortenedLink);
+                const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
+                const summary = await runCompletion(prompt, 1);
+                await message.reply(summary);
+            } catch (error) {
+                await message.reply('Não consegui acessar o link para gerar um resumo.');
+            }
+        } else {
+            // Case 2: Quoted message without link - summarize quoted message
+            const contact = await quotedMessage.getContact();
+            const name = contact.name || 'Unknown';
+            const prompt = config.PROMPTS.HOUR_SUMMARY
+                .replace('{name}', name)
+                .replace('{messageTexts}', `>>${name}: ${quotedText}.\n`);
+            const result = await runCompletion(prompt, 1);
+            await message.reply(result.trim());
         }
-    }
-
-    if (linkToSummarize) {
-        try {
-            const unshortenedLink = await unshortenLink(linkToSummarize);
-            const pageContent = await getPageContent(unshortenedLink);
-            const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
-            const summary = await runCompletion(prompt, 1);
-            
-            await message.reply(summary);
-        } catch (error) {
-            await message.reply('Não consegui acessar o link para gerar um resumo.');
-        }
-    } else if (quotedMessage) {
-        const prompt = config.PROMPTS.HOUR_SUMMARY
-            .replace('{name}', 'User')
-            .replace('{messageTexts}', quotedMessage.body);
-        const result = await runCompletion(prompt, 1);
-        await message.reply(result.trim());
     } else {
+        // Case 3: No quoted message - summarize last 3 hours
         const messages = await chat.fetchMessages({ limit: 1000 });
         const threeHoursAgo = Date.now() - 3 * 3600 * 1000;
         const messagesLastThreeHours = messages.filter(m => m.timestamp * 1000 > threeHoursAgo && !m.fromMe && m.body.trim() !== '');
