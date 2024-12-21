@@ -28,7 +28,7 @@ async function initializeMessageLog() {
             
             // First fetch to count valid messages ratio
             const sampleMessages = await group1.fetchMessages({ limit: 100 });
-            const validCount = sampleMessages.filter(msg => msg.body.trim()).length;
+            const validCount = sampleMessages.filter(msg => !msg.fromMe && msg.body.trim()).length;
             const validRatio = validCount / sampleMessages.length;
             
             // Calculate how many messages we need to fetch to get our target
@@ -99,7 +99,18 @@ async function getMessageHistory() {
         const messageLog = JSON.parse(await fs.readFile(LOG_FILE, 'utf8'));
         const validMessages = messageLog
             .slice(-config.MAX_LOG_MESSAGES)
-            .map(msg => `>>${msg.sender}: ${msg.message}`);
+            .map(msg => {
+                const date = new Date(msg.timestamp * 1000);
+                const formattedDate = date.toLocaleString('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return `[${formattedDate}] >>${msg.sender}: ${msg.message}`;
+            });
             
         return validMessages.join('\n');
     } catch (error) {
