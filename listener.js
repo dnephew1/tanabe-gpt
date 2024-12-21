@@ -27,7 +27,7 @@ async function setupListeners(client) {
     client.on('message', async message => {
         try {
             const chat = await message.getChat();
-            
+                    
             const isGroup1 = chat.name === config.GROUP1_NAME;
 
             if (isGroup1) {
@@ -45,7 +45,8 @@ async function setupListeners(client) {
             // Only process and send typing state for commands or relevant messages
             if (messageBody.startsWith('#') || messageBody === '!clearcache' || 
                 (contactName.includes('Rodrigo') && isGroup1) || 
-                message.from === `${config.ADMIN_NUMBER}@c.us`) {
+                message.from === `${config.ADMIN_NUMBER}@c.us` || 
+                message.body.includes('@')) {
                 
                 await chat.sendStateTyping();
                 console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
@@ -66,8 +67,10 @@ async function setupListeners(client) {
                 }
 
                 // Handle mentions/tags
-                if (!commandHandled && message.body.includes('@')) {
-                    await handleTags(message, chat);
+                if (message.body.includes('@')) {
+                    if (isGroup1 || isAdminChat) {
+                        await handleTags(message, chat);
+                    }
                 }
 
                 if (isGroup1) {
@@ -158,7 +161,8 @@ async function handleMessageReaction(reaction) {
 
 // Function to handle mentions/tags
 async function handleTags(message, chat) {
-    if (chat.isGroup) {
+    try {
+        const participants = chat.groupMetadata.participants;
         const messageText = message.body.toLowerCase();
         const tagHandlers = {
             '@all': handleAllTag,
@@ -171,49 +175,49 @@ async function handleTags(message, chat) {
         for (const [tag, handler] of Object.entries(tagHandlers)) {
             if (messageText.includes(tag.toLowerCase())) {
                 try {
-                    await handler(message, chat);
+                    await handler(message, chat, participants);
                     console.log(`Handled ${tag} tag`);
                 } catch (error) {
                     console.error(`Error handling ${tag} tag:`, error);
                 }
             }
         }
+    } catch (error) {
+        console.error('Failed to fetch participants:', error);
     }
 }
 
-async function handleAllTag(message, chat) {
-    const mentions = await Promise.all(chat.participants.map(async (participant) => {
-        return await global.client.getContactById(participant.id._serialized);
-    }));
+async function handleAllTag(message, chat, participants) {
+    const mentions = participants.map(participant => participant.id._serialized);
     sendTagMessage(chat, mentions, message.id._serialized);
 }
 
-async function handleAdminTag(message, chat) {
-    const mentions = await Promise.all(chat.participants.map(async (participant) => {
+async function handleAdminTag(message, chat, participants) {
+    const mentions = await Promise.all(participants.map(async (participant) => {
         const contact = await global.client.getContactById(participant.id._serialized);
         return participant.isAdmin ? contact : null;
     }));
     sendTagMessage(chat, mentions.filter(Boolean), message.id._serialized);
 }
 
-async function handleMedicosTag(message, chat) {
-    const mentions = await Promise.all(chat.participants.map(async (participant) => {
+async function handleMedicosTag(message, chat, participants) {
+    const mentions = await Promise.all(participants.map(async (participant) => {
         const contact = await global.client.getContactById(participant.id._serialized);
         return (contact.name.includes('Maddi') || contact.name.includes('Costa')) ? contact : null;
     }));
     sendTagMessage(chat, mentions.filter(Boolean), message.id._serialized);
 }
 
-async function handleEngenheirosTag(message, chat) {
-    const mentions = await Promise.all(chat.participants.map(async (participant) => {
+async function handleEngenheirosTag(message, chat, participants) {
+    const mentions = await Promise.all(participants.map(async (participant) => {
         const contact = await global.client.getContactById(participant.id._serialized);
         return (contact.name.includes('Ormundo') || contact.name.includes('João') || contact.name.includes('Ricardo') || contact.name.includes('Parolin') || contact.name.includes('Boacnin')) ? contact : null;
     }));
     sendTagMessage(chat, mentions.filter(Boolean), message.id._serialized);
 }
 
-async function handleCartolaTag(message, chat) {
-    const mentions = await Promise.all(chat.participants.map(async (participant) => {
+async function handleCartolaTag(message, chat, participants) {
+    const mentions = await Promise.all(participants.map(async (participant) => {
         const contact = await global.client.getContactById(participant.id._serialized);
         return (contact.name.includes('Madasi') || contact.name.includes('Boacnin') || contact.name.includes('Costa') || contact.name.includes('Dybwad') || contact.name.includes('Ricardo') || contact.name.includes('Parolin')) ? contact : null;
     }));
@@ -227,11 +231,14 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
         return;
     }
 
-    let text = mentions.map(contact => `@${contact.number}`).join(' ');
-    console.log(`Sending tag message with ${mentions.length} mentions`);
-    
+    // Ensure mentions are serialized IDs
+    const mentionIds = mentions.map(contact => contact.id._serialized);
+
+    let text = mentionIds.map(id => `@${id.split('@')[0]}`).join(' ');
+    console.log(`Sending tag message with ${mentionIds.length} mentions`);
+
     return chat.sendMessage(text, {
-        mentions,
+        mentions: mentionIds,
         quotedMessageId
     }).catch(error => {
         console.error('Error sending tag message:', error);

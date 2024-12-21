@@ -18,6 +18,6 @@
     "qrcode-terminal": "^0.12.0",
     "translate": "^2.0.2",
     "translate-google": "^1.5.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#webpack-exodus"
+    "whatsapp-web.js": "1.26.1-alpha.3"
   }
 }
