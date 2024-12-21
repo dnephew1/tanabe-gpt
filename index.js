@@ -5,6 +5,7 @@ const qrcode = require('qrcode-terminal');
 const { config, notifyAdmin } = require('./dependencies');
 const { setupListeners } = require('./listener');
 const { runPeriodicSummary } = require('./periodicSummary');
+const { initializeMessageLog } = require('./messageLogger');
 
 let cacheManagement;
 if (config.ENABLE_AUTOMATED_CACHE_CLEARING || config.ENABLE_STARTUP_CACHE_CLEARING) {
@@ -45,6 +46,7 @@ client.on('ready', async () => {
     console.log('Client is ready!');
     global.client.isReady = true;
     global.client.pupBrowser = client.pupPage.browser();
+    await initializeMessageLog();
 
     try {
         await notifyAdmin("Bot is online and ready!");

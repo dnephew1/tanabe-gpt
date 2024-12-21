@@ -13,43 +13,66 @@ const {
     handleStickerCreation
 } = require('./commands');
 const { handleCorrenteResumoCommand } = require('./periodicSummary');
+const { initializeMessageLog, logMessage } = require('./messageLogger');
 
-function setupListeners(client) {
+async function setupListeners(client) {
+    global.client = client;
+    
+    client.on('ready', async () => {
+        // Initialize message log after client is ready
+        await initializeMessageLog();
+    });
+
     // Handle incoming messages
     client.on('message', async message => {
         try {
             const chat = await message.getChat();
-            await chat.sendStateTyping(); // Global state typing at the start of any message processing
+            
+            const isGroup1 = chat.name === config.GROUP1_NAME;
+
+            if (isGroup1) {
+                await logMessage(message);
+            }
             
             const messageBody = message.body.trim();
             const contact = await message.getContact();
             const contactName = contact.pushname || contact.name || contact.number;
             const input = messageBody.split(' ');
             const inputLower = input.map(item => item.toLowerCase());
-            const isGroup1 = chat.name === config.GROUP1_NAME;
             const isGroup2 = chat.name === config.GROUP2_NAME;
             const isAdminChat = message.from === `${config.ADMIN_NUMBER}@c.us`;
             
-            let commandHandled = false;
+            // Only process and send typing state for commands or relevant messages
+            if (messageBody.startsWith('#') || messageBody === '!clearcache' || 
+                (contactName.includes('Rodrigo') && isGroup1) || 
+                message.from === `${config.ADMIN_NUMBER}@c.us`) {
+                
+                await chat.sendStateTyping();
+                console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
+                
+                let commandHandled = false;
 
-            console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
-
-            // Handle commands
-            if (messageBody === '!clearcache' && isAdminChat) {
-                await handleCacheClearCommand(message);
-                commandHandled = true;
-            } else if (isGroup1 || isAdminChat || !chat.isGroup) {
-                commandHandled = await handleCommonCommands(message, inputLower, input);
-                if (!commandHandled && (isGroup1 || isAdminChat)) {
-                    commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+                // Handle commands
+                if (messageBody === '!clearcache' && isAdminChat) {
+                    await handleCacheClearCommand(message);
+                    commandHandled = true;
+                } else if (isGroup1 || isAdminChat || !chat.isGroup) {
+                    commandHandled = await handleCommonCommands(message, inputLower, input);
+                    if (!commandHandled && (isGroup1 || isAdminChat)) {
+                        commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+                    }
+                } else if (isGroup2) {
+                    commandHandled = await handleGroup2Commands(message, inputLower, input);
                 }
-            } else if (isGroup2) {
-                commandHandled = await handleGroup2Commands(message, inputLower, input);
-            }
 
-            // Handle mentions/tags
-            if (!commandHandled && message.body.includes('@')) {
-                await handleTags(message, chat);
+                // Handle mentions/tags
+                if (!commandHandled && message.body.includes('@')) {
+                    await handleTags(message, chat);
+                }
+
+                if (isGroup1) {
+                    await logMessage(message);
+                }
             }
         } catch (error) {
             console.error('An error occurred while processing a message:', error);
