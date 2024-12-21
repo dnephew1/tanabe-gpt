@@ -24,7 +24,6 @@ async function initializeMessageLog() {
         const group1 = chats.find(chat => chat.name === config.GROUP1_NAME);
         
         if (group1) {
-            console.log('Fetching messages for initial log...');
             
             // First fetch to count valid messages ratio
             const sampleMessages = await group1.fetchMessages({ limit: 100 });
@@ -33,7 +32,6 @@ async function initializeMessageLog() {
             
             // Calculate how many messages we need to fetch to get our target
             const estimatedTotal = Math.ceil(config.MAX_LOG_MESSAGES / validRatio);
-            console.log(`Estimated total messages needed: ${estimatedTotal}`);
             
             // Fetch the estimated amount
             const messages = await group1.fetchMessages({ limit: estimatedTotal });
@@ -53,7 +51,6 @@ async function initializeMessageLog() {
             }));
 
             await fs.writeFile(LOG_FILE, JSON.stringify(formattedMessages, null, 2));
-            console.log(`Initialized message log with ${formattedMessages.length} messages`);
         }
     } catch (error) {
         console.error('Error initializing message log:', error);
