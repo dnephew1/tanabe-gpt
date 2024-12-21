@@ -37,7 +37,6 @@ async function runPeriodicSummary() {
 async function handleCorrenteResumoCommand(message, input) {
     console.log('handleCorrenteResumoCommand activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
 
     const parts = message.body ? message.body.split(' ') : input;
     let limit = parseInt(parts[1]) || 0;

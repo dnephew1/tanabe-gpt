@@ -46,7 +46,6 @@ async function performCacheClearing() {
     await clearWhatsAppCache();
     await clearPuppeteerCache();
     console.log('Cache clearing process completed');
-    await notifyAdmin("Cache clearing process completed");
 }
 
 // Function to clear WhatsApp Web cache

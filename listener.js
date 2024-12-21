@@ -19,6 +19,8 @@ function setupListeners(client) {
     client.on('message', async message => {
         try {
             const chat = await message.getChat();
+            await chat.sendStateTyping(); // Global state typing at the start of any message processing
+            
             const messageBody = message.body.trim();
             const contact = await message.getContact();
             const contactName = contact.pushname || contact.name || contact.number;
@@ -41,11 +43,10 @@ function setupListeners(client) {
                 if (!commandHandled && (isGroup1 || isAdminChat)) {
                     commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
                 }
-////////////////////////////////////////////////////////////////////////////////////////////////////////
             } else if (isGroup2) {
                 commandHandled = await handleGroup2Commands(message, inputLower, input);
             }
-////////////////////////////////////////////////////////////////////////////////////////////////////////
+
             // Handle mentions/tags
             if (!commandHandled && message.body.includes('@')) {
                 await handleTags(message, chat);
@@ -135,6 +136,7 @@ async function handleMessageReaction(reaction) {
 // Function to handle mentions/tags
 async function handleTags(message, chat) {
     if (chat.isGroup) {
+        const messageText = message.body.toLowerCase();
         const tagHandlers = {
             '@all': handleAllTag,
             '@admin': handleAdminTag,
@@ -144,8 +146,13 @@ async function handleTags(message, chat) {
         };
 
         for (const [tag, handler] of Object.entries(tagHandlers)) {
-            if (message.body.toLowerCase().includes(tag)) {
-                await handler(message, chat);
+            if (messageText.includes(tag.toLowerCase())) {
+                try {
+                    await handler(message, chat);
+                    console.log(`Handled ${tag} tag`);
+                } catch (error) {
+                    console.error(`Error handling ${tag} tag:`, error);
+                }
             }
         }
     }
@@ -192,10 +199,19 @@ async function handleCartolaTag(message, chat) {
 
 // Function to send tag message
 function sendTagMessage(chat, mentions, quotedMessageId) {
+    if (!mentions || mentions.length === 0) {
+        console.log('No mentions to send');
+        return;
+    }
+
     let text = mentions.map(contact => `@${contact.number}`).join(' ');
-    chat.sendMessage(text, {
+    console.log(`Sending tag message with ${mentions.length} mentions`);
+    
+    return chat.sendMessage(text, {
         mentions,
         quotedMessageId
+    }).catch(error => {
+        console.error('Error sending tag message:', error);
     });
 }
 
