@@ -58,7 +58,7 @@ setInterval(async () => {
 async function handleResumoCommand(message, input) {
     console.log('handleResumoCommand activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
     const limit = parseInt(input[1]);
 
     if (isNaN(limit)) {
@@ -110,7 +110,7 @@ async function handleStickerMessage(message) {
 async function handleAyubNewsCommand(message, input) {
     console.log('handleAyubNewsCommand activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     if (input[1] && input[1].toLowerCase() === 'fut') {
         await handleAyubNewsFut(message);
@@ -122,7 +122,7 @@ async function handleAyubNewsCommand(message, input) {
 async function handleAyubLinkSummary(message, links) {
     console.log('handleAyubLinkSummary activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
     const link = links[0];
 
     try {
@@ -154,7 +154,7 @@ async function handleAyubLinkSummary(message, links) {
 async function handleHashTagCommand(message) {
     console.log('handleHashTagCommand activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
     const contact = await message.getContact();
     const name = contact.name || 'Unknown';
 
@@ -191,7 +191,7 @@ async function handleHashTagCommand(message) {
 async function handleCommandList(message) {
     console.log('handleCommandList activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     const commandList = `
 Comandos disponíveis:
@@ -224,7 +224,7 @@ Comandos disponíveis:
 async function handleStickerCreation(message) {
     console.log('handleStickerCreation activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     if (message.hasMedia) {
         const attachmentData = await message.downloadMedia();
@@ -304,7 +304,7 @@ async function handleCacheClearCommand(message) {
 
 async function handleResumoSticker(message) {
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     let quotedMessage = null;
     let linkToSummarize = null;
@@ -365,7 +365,7 @@ async function handleResumoSticker(message) {
 async function handleAyubNewsSticker(message) {
     console.log('handleAyubNewsSticker activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     try {
         const news = await scrapeNews();
@@ -398,7 +398,7 @@ async function handleAyubNewsSticker(message) {
 async function handleAyubNewsFut(message) {
     console.log('handleAyubNewsFut activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     try {
         const news = await scrapeNews2();
@@ -429,7 +429,7 @@ async function handleAyubNewsFut(message) {
 async function handleAyubNewsSearch(message, input) {
     console.log('handleAyubNewsSearch activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     const keywords = input.slice(1).join(' ');
     const query = encodeURIComponent(keywords);
@@ -461,7 +461,7 @@ async function handleAyubNewsSearch(message, input) {
 async function handleDesenhoCommand(message, command, promptInput) {
     console.log('handleDesenhoCommand activated');
     const chat = await message.getChat();
-    await chat.sendStateTyping();
+    
 
     if (!promptInput) {
         message.reply('Por favor, forneça uma descrição após #desenho.')
