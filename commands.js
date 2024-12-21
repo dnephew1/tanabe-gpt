@@ -23,6 +23,7 @@ const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs').promises;
+const { getMessageHistory } = require('./messageLogger');
 
 // Helper function to delete messages after a timeout
 const messageQueue = [];
@@ -158,10 +159,24 @@ async function handleHashTagCommand(message) {
     const contact = await message.getContact();
     const name = contact.name || 'Unknown';
 
-    let prompt = config.PROMPTS.HASHTAG_COMMAND
-        .replace('{name}', name)
-        .replace('{question}', message.body.substring(1));
+    let prompt;
+    if (message.hasQuotedMsg) {
+        // If there's a quoted message, use a simpler prompt without message history
+        prompt = `{name} está perguntando: {question}`
+            .replace('{name}', name)
+            .replace('{question}', message.body.substring(1));
+    } else {
+        // If no quoted message, include the message history
+        const messageHistory = await getMessageHistory();
+        prompt = config.PROMPTS.HASHTAG_COMMAND(config.MAX_LOG_MESSAGES)
+            .replace('{name}', name)
+            .replace('{question}', message.body.substring(1))
+            .replace('{messageHistory}', messageHistory);
+    }
 
+    console.log('Prompt for hashtag command:', prompt);
+
+    let finalPrompt = prompt;
     if (message.hasQuotedMsg) {
         const quotedMessage = await message.getQuotedMessage();
         const quotedText = quotedMessage.body;
@@ -171,7 +186,7 @@ async function handleHashTagCommand(message) {
             try {
                 const unshortenedLink = await unshortenLink(link);
                 const pageContent = await getPageContent(unshortenedLink);
-                prompt += config.PROMPTS.HASHTAG_COMMAND_CONTEXT.replace('{pageContent}', pageContent);
+                finalPrompt += config.PROMPTS.HASHTAG_COMMAND_CONTEXT.replace('{pageContent}', pageContent);
             } catch (error) {
                 console.error('Error accessing link for context:', error);
                 message.reply('Não consegui acessar o link para fornecer contexto adicional.')
@@ -179,13 +194,17 @@ async function handleHashTagCommand(message) {
                 return;
             }
         } else {
-            prompt += config.PROMPTS.HASHTAG_COMMAND_QUOTED.replace('{quotedText}', quotedText);
+            finalPrompt += config.PROMPTS.HASHTAG_COMMAND_QUOTED.replace('{quotedText}', quotedText);
         }
     }
 
-    const result = await runCompletion(prompt, 1);
-    message.reply(result.trim())
-        .catch(error => console.error('Failed to send message:', error));
+    try {
+        const result = await runCompletion(finalPrompt, 1);
+        await message.reply(result.trim());
+    } catch (error) {
+        console.error('Error in handleHashTagCommand:', error);
+        await message.reply('Desculpe, ocorreu um erro ao processar sua pergunta.');
+    }
 }
 
 async function handleCommandList(message) {
