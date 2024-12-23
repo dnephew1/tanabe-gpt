@@ -2,30 +2,6 @@ const { config, notifyAdmin } = require('./dependencies');
 const path = require('path');
 const fs = require('fs').promises;
 
-function scheduleCacheClearing() {
-    if (!config.ENABLE_AUTOMATED_CACHE_CLEARING) {
-        console.log('Automated cache clearing is disabled');
-        return;
-    }
-
-    const now = new Date();
-    let nextClearTime = new Date(now);
-    nextClearTime.setHours(config.CACHE_CLEAR_HOUR, config.CACHE_CLEAR_MINUTE, 0, 0);
-    
-    if (nextClearTime <= now) {
-        nextClearTime.setDate(nextClearTime.getDate() + 1);
-    }
-
-    const timeUntilNextClear = nextClearTime.getTime() - now.getTime();
-
-    setTimeout(async () => {
-        await performCacheClearing();
-        scheduleCacheClearing(); // Schedule the next cache clearing
-    }, timeUntilNextClear);
-
-    console.log(`Next cache clearing scheduled for ${nextClearTime.toLocaleString()} (Local Time)`);
-}
-
 async function startupCacheClearing() {
     if (!config.ENABLE_STARTUP_CACHE_CLEARING) {
         console.log('Startup cache clearing is disabled');
@@ -42,7 +18,6 @@ async function startupCacheClearing() {
 
 // Function to perform cache clearing
 async function performCacheClearing() {
-    console.log('Starting cache clearing process...');
     await clearWhatsAppCache();
     await clearPuppeteerCache();
     console.log('Cache clearing process completed');
@@ -55,7 +30,6 @@ async function clearWhatsAppCache() {
     if (await fs.access(cacheDir).then(() => true).catch(() => false)) {
         try {
             await fs.rm(cacheDir, { recursive: true, force: true });
-            console.log('WhatsApp Web cache cleared successfully');
         } catch (err) {
             console.error('Error clearing WhatsApp Web cache:', err);
         }
@@ -70,7 +44,6 @@ async function clearPuppeteerCache() {
             for (let i = 1; i < pages.length; i++) {
                 await pages[i].close();
             }
-            console.log('Puppeteer cache cleared successfully');
         } catch (error) {
             console.error('Error clearing Puppeteer cache:', error);
         }
@@ -78,7 +51,6 @@ async function clearPuppeteerCache() {
 }
 
 module.exports = {
-    performCacheClearing,
-    scheduleCacheClearing,
-    startupCacheClearing
+    startupCacheClearing,
+    performCacheClearing
 };

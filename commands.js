@@ -98,11 +98,16 @@ async function handleResumoCommand(message, input) {
 async function handleStickerMessage(message) {
     const stickerData = await message.downloadMedia();
     const hash = crypto.createHash('sha256').update(stickerData.data).digest('hex');
+    const chat = await message.getChat();
 
-    if (hash === config.STICKER_HASHES.RESUMO) {
-        await handleResumoSticker(message);
-    } else if (hash === config.STICKER_HASHES.AYUB) {
-        await handleAyubNewsSticker(message);
+    if (hash === config.STICKER_HASHES.RESUMO || hash === config.STICKER_HASHES.AYUB) {
+        await chat.sendStateTyping();
+        
+        if (hash === config.STICKER_HASHES.RESUMO) {
+            await handleResumoSticker(message);
+        } else if (hash === config.STICKER_HASHES.AYUB) {
+            await handleAyubNewsSticker(message);
+        }
     } else {
         console.log('Sticker hash does not match any expected hash');
     }
@@ -174,8 +179,6 @@ async function handleHashTagCommand(message) {
             .replace('{messageHistory}', messageHistory);
     }
 
-    console.log('Prompt for hashtag command:', prompt);
-
     let finalPrompt = prompt;
     if (message.hasQuotedMsg) {
         const quotedMessage = await message.getQuotedMessage();
@@ -226,9 +229,9 @@ Comandos disponíveis:
 *@medicos* - Menciona os médicos no grupo
 *@engenheiros* - Menciona os engenheiros no grupo
 *@cartola* - Menciona os jogadores de Cartola do grupo
-*#?* - Lista de comandos disponíveis
-*#desenho [descrição]* - Gera uma imagem com base na descrição fornecida (apenas para grupo1)
+*#desenho [descrição]* - Gera uma imagem com base na descrição fornecida
 *!clearcache* - (Apenas para admin) Limpa o cache do bot
+*#?* - Lista de comandos disponíveis
     `;
 
     try {
@@ -404,7 +407,6 @@ async function handleAyubNewsSticker(message) {
         });
 
         message.reply(reply)
-            .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
             .catch(error => console.error('Failed to send message:', error));
     } catch (error) {
         console.error('Error accessing news:', error);
@@ -490,7 +492,6 @@ async function handleDesenhoCommand(message, command, promptInput) {
 
     try {
         const improvedPrompt = await improvePrompt(promptInput);
-        console.log('Improved prompt:', improvedPrompt);
 
         const originalImageBase64 = await generateImage(promptInput);
         const improvedImageBase64 = await generateImage(improvedPrompt);
