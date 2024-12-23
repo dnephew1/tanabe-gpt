@@ -27,9 +27,9 @@ async function setupListeners(client) {
     client.on('message', async message => {
         try {
             const chat = await message.getChat();
-                    
             const isGroup1 = chat.name === config.GROUP1_NAME;
-
+            
+            // Log messages from Group1
             if (isGroup1) {
                 await logMessage(message);
             }
@@ -42,41 +42,55 @@ async function setupListeners(client) {
             const isGroup2 = chat.name === config.GROUP2_NAME;
             const isAdminChat = message.from === `${config.ADMIN_NUMBER}@c.us`;
             
-            // Only process and send typing state for commands or relevant messages
-            if (messageBody.startsWith('#') || messageBody === '!clearcache' || 
-                (contactName.includes('Rodrigo') && isGroup1) || 
-                message.from === `${config.ADMIN_NUMBER}@c.us` || 
-                message.body.includes('@')) {
-                
-                await chat.sendStateTyping();
-                console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
-                
-                let commandHandled = false;
-
-                // Handle commands
-                if (messageBody === '!clearcache' && isAdminChat) {
-                    await handleCacheClearCommand(message);
-                    commandHandled = true;
-                } else if (isGroup1 || isAdminChat || !chat.isGroup) {
-                    commandHandled = await handleCommonCommands(message, inputLower, input);
-                    if (!commandHandled && (isGroup1 || isAdminChat)) {
-                        commandHandled = await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
-                    }
-                } else if (isGroup2) {
-                    commandHandled = await handleGroup2Commands(message, inputLower, input);
-                }
-
-                // Handle mentions/tags
-                if (message.body.includes('@')) {
-                    if (isGroup1 || isAdminChat) {
-                        await handleTags(message, chat);
-                    }
-                }
-
-                if (isGroup1) {
-                    await logMessage(message);
+            // Check if sender is a participant of Group1 for private chats
+            let isGroup1Participant = false;
+            if (!chat.isGroup) {
+                const chats = await client.getChats();
+                const group1 = chats.find(c => c.name === config.GROUP1_NAME);
+                if (group1) {
+                    const participants = await group1.participants;
+                    isGroup1Participant = participants.some(p => p.id._serialized === message.from);
                 }
             }
+
+            // First check for stickers in Group1 or from Group1 participants
+            if ((isGroup1 || isGroup1Participant || isAdminChat) && message.hasMedia && message.type === 'sticker') {
+                await handleStickerMessage(message);
+                return;
+            }
+
+            // Then process other commands
+            if (messageBody.startsWith('#') || messageBody === '!clearcache') {
+                // Only show typing for valid commands
+                await chat.sendStateTyping();
+                console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
+
+                // Handle commands based on context
+                if (isGroup1 || isGroup1Participant || isAdminChat) {
+                    // Admin-only command
+                    if (messageBody === '!clearcache') {
+                        if (isAdminChat) {
+                            await handleCacheClearCommand(message);
+                        }
+                    } else {
+                        await handleGroup1Commands(message, inputLower, input, contactName, isGroup1);
+                    }
+                } else if (isGroup2 && messageBody.startsWith('#resumo')) {
+                    await handleCorrenteResumoCommand(message, input);
+                }
+            }
+
+            // Handle mentions/tags only in Group1
+            if (message.body.includes('@') && isGroup1) {
+                const validTags = ['@all', '@admin', '@medicos', '@engenheiros', '@cartola'];
+                const hasValidTag = validTags.some(tag => message.body.toLowerCase().includes(tag.toLowerCase()));
+                
+                if (hasValidTag) {
+                    await chat.sendStateTyping();
+                    await handleTags(message, chat);
+                }
+            }
+
         } catch (error) {
             console.error('An error occurred while processing a message:', error);
             await notifyAdmin(`Error processing message: ${error.message}`);
@@ -87,24 +101,18 @@ async function setupListeners(client) {
     client.on('message_reaction', handleMessageReaction);
 }
 
-//Commands allowed universally
-async function handleCommonCommands(message, inputLower, input) {
+//Group1 commands
+async function handleGroup1Commands(message, inputLower, input, contactName, isGroup1) {
+    // Handle sticker-related commands
     if (message.hasMedia && message.type === 'sticker') {
         await handleStickerMessage(message);
         return true;
     } else if (inputLower[0] === '#sticker') {
-        return await handleStickerCreation(message);
-    }
-    return false;
-}
-
-//Group1 commands
-async function handleGroup1Commands(message, inputLower, input, contactName, isGroup1) {
-    if (await handleCommonCommands(message, inputLower, input)) {
+        await handleStickerCreation(message);
         return true;
     }
 
-    // Rest of the Group 1 specific commands
+    // Handle other commands
     if (inputLower[0].startsWith('#resumo')) {
         await handleResumoCommand(message, input);
         return true;
@@ -116,9 +124,6 @@ async function handleGroup1Commands(message, inputLower, input, contactName, isG
         return true;
     } else if (inputLower[0] === '#desenho') {
         await handleDesenhoCommand(message, inputLower[0], input.slice(1).join(' '));
-        return true;
-    } else if (inputLower[0] === '#sticker') {
-        await handleStickerCreation(message);
         return true;
     } else if (message.body.startsWith('#')) {
         await handleHashTagCommand(message);
@@ -244,16 +249,6 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
         console.error('Error sending tag message:', error);
     });
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-async function handleGroup2Commands(message, inputLower, input) {
-    if (inputLower[0].startsWith('#resumo')) {
-        await handleCorrenteResumoCommand(message, input);
-        return true;
-    }
-    return false;
-}
-////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 module.exports = {
     setupListeners

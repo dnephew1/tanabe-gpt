@@ -47,7 +47,6 @@ async function notifyAdmin(message) {
         }
         
         const sent = await global.client.sendMessage(adminContact, message);
-        console.log('Admin notified:', message);
         return sent;
     } catch (error) {
         console.error('Failed to notify admin:', error);

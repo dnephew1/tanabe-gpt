@@ -8,7 +8,7 @@ const { runPeriodicSummary } = require('./periodicSummary');
 const { initializeMessageLog } = require('./messageLogger');
 
 let cacheManagement;
-if (config.ENABLE_AUTOMATED_CACHE_CLEARING || config.ENABLE_STARTUP_CACHE_CLEARING) {
+if (config.ENABLE_STARTUP_CACHE_CLEARING) {
     cacheManagement = require('./cacheManagement');
 }
 
@@ -57,9 +57,6 @@ client.on('ready', async () => {
     if (cacheManagement) {
         if (config.ENABLE_STARTUP_CACHE_CLEARING) {
             await cacheManagement.startupCacheClearing();
-        }
-        if (config.ENABLE_AUTOMATED_CACHE_CLEARING) {
-            cacheManagement.scheduleCacheClearing();
         }
     }
     scheduleNextSummary(); // Schedule the periodic summary
