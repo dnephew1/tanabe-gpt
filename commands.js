@@ -284,10 +284,7 @@ async function handleStickerCreation(message) {
                     const imagePath = await downloadImage(imageUrl);
                     if (imagePath) {
                         const imageAsSticker = MessageMedia.fromFilePath(imagePath);
-                        await global.client.sendMessage(message.from, imageAsSticker, {
-                            sendMediaAsSticker: true
-                        });
-                        // Delete the file after sending
+                        await message.reply(imageAsSticker, message.from, { sendMediaAsSticker: true });
                         await deleteFile(imagePath);
                     } else {
                         message.reply('Falha ao baixar a imagem para o sticker.')
@@ -327,17 +324,14 @@ async function handleCacheClearCommand(message) {
 async function handleResumoSticker(message) {
     const chat = await message.getChat();
     
-
-    let quotedMessage = null;
-    let linkToSummarize = null;
-
     if (message.hasQuotedMsg) {
-        quotedMessage = await message.getQuotedMessage();
+        // Case 1: Handle quoted message
+        const quotedMessage = await message.getQuotedMessage();
         const quotedText = quotedMessage.body;
         const links = extractLinks(quotedText);
 
         if (links.length > 0) {
-            // Case 1: Quoted message contains a link - summarize link content
+            // Case 1a: Quoted message contains a link - summarize link content
             try {
                 const unshortenedLink = await unshortenLink(links[0]);
                 const pageContent = await getPageContent(unshortenedLink);
@@ -348,7 +342,7 @@ async function handleResumoSticker(message) {
                 await message.reply('Não consegui acessar o link para gerar um resumo.');
             }
         } else {
-            // Case 2: Quoted message without link - summarize quoted message
+            // Case 1b: Quoted message without link - summarize quoted message
             const contact = await quotedMessage.getContact();
             const name = contact.name || 'Unknown';
             const prompt = config.PROMPTS.HOUR_SUMMARY
@@ -358,10 +352,14 @@ async function handleResumoSticker(message) {
             await message.reply(result.trim());
         }
     } else {
-        // Case 3: No quoted message - summarize last 3 hours
+        // Case 2: No quoted message - summarize last 3 hours
         const messages = await chat.fetchMessages({ limit: 1000 });
         const threeHoursAgo = Date.now() - 3 * 3600 * 1000;
-        const messagesLastThreeHours = messages.filter(m => m.timestamp * 1000 > threeHoursAgo && !m.fromMe && m.body.trim() !== '');
+        const messagesLastThreeHours = messages.filter(m => 
+            m.timestamp * 1000 > threeHoursAgo && 
+            !m.fromMe && 
+            m.body.trim() !== ''
+        );
 
         if (messagesLastThreeHours.length === 0) {
             await message.reply('Não há mensagens suficientes para gerar um resumo.');
