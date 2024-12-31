@@ -19,7 +19,8 @@ const {
     generateImage,
     improvePrompt,
     transcribeAudio,
-    fsPromises
+    fsPromises,
+    getTweetCount
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
@@ -312,14 +313,28 @@ async function handleStickerCreation(message) {
     }
 }
 
-// Handle manual cache clear command
+// Helper function to check if message is from admin chat
+async function isAdminChat(message) {
+    const chat = await message.getChat();
+    const contact = await message.getContact();
+    return contact.id._serialized === `${config.ADMIN_NUMBER}@c.us` && chat.isGroup === false;
+}
+
 async function handleCacheClearCommand(message) {
-    if (message.from === `${config.ADMIN_NUMBER}@c.us`) {
-        await message.reply('Starting manual cache clearing process...');
+    try {
+        console.log('handleCacheClearCommand activated');
+        
+        // Check if message is from admin chat
+        if (!await isAdminChat(message)) {
+            console.log('Cache clear command rejected: not admin chat');
+            return;
+        }
+        
         await performCacheClearing();
-        await message.reply('Manual cache clearing process completed.');
-    } else {
-        await message.reply('You are not authorized to use this command.');
+        await message.reply('Cache cleared successfully');
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        await message.reply(`Error clearing cache: ${error.message}`);
     }
 }
 
@@ -516,27 +531,55 @@ async function handleDesenhoCommand(message, command, promptInput) {
 async function handleTwitterDebug(message) {
     try {
         console.log('handleTwitterDebug activated');
+        
+        // Check if message is from admin chat
+        if (!await isAdminChat(message)) {
+            console.log('Twitter debug command rejected: not admin chat');
+            return;
+        }
+        
         const chat = await message.getChat();
         await chat.sendStateTyping();
         
         const results = [];
         for (const account of config.TWITTER_ACCOUNTS) {
             try {
-                const twitterUrl = `https://x.com/${account.username}`;
-                const result = await getPageContent(twitterUrl);
+                // Get current tweet count from SocialBlade
+                const currentTweetCount = await getTweetCount(account.username);
                 
-                if (!result || !result.content || !result.tweetId) {
-                    results.push(`Failed to fetch content for @${account.username}`);
-                    continue;
+                // Get latest tweets using the user ID directly
+                const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
+                const response = await axios.get(twitterApiUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${config.TWITTER_BEARER_TOKEN}`
+                    }
+                });
+                
+                let tweetText = 'No tweets found';
+                if (response.data && response.data.data && response.data.data.length > 0) {
+                    // Get the most recent tweet (first in the array)
+                    tweetText = response.data.data[0].text;
                 }
+                
+                results.push(`@${account.username}:
+                Last Tweet ID: ${account.lastTweetId}
+                Stored Tweet Count: ${account.lastTweetCount}
+                Current Tweet Count: ${currentTweetCount}
+                Latest Tweet Text: ${tweetText}`);
 
-                results.push(`@${account.username}:\nLast Tweet ID: ${account.lastTweetId}\nLatest Tweet ID: ${result.tweetId}\nContent: ${result.content}\nURL: https://x.com/${account.username}/status/${result.tweetId}`);
+                // Add delay between accounts to avoid rate limits
+                if (config.TWITTER_ACCOUNTS.length > 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
             } catch (error) {
                 results.push(`Error checking @${account.username}: ${error.message}`);
+                console.error(`Detailed error for ${account.username}:`, error.response?.data || error);
             }
         }
         
-        await message.reply(results.join('\n\n'));
+        // Send debug info to admin
+        const debugInfo = results.join('\n\n');
+        await message.reply(debugInfo);
     } catch (error) {
         console.error('Error in handleTwitterDebug:', error);
         await message.reply(`Debug error: ${error.message}`);
