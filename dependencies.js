@@ -104,10 +104,115 @@ async function unshortenLink(link) {
     });
 }
 
-// Function to get page content
+let twitterLoggedIn = false;
+
+async function loginToTwitter(page) {
+    if (twitterLoggedIn) return true;
+    
+    try {
+        await page.goto('https://twitter.com/i/flow/login', {
+            waitUntil: 'networkidle0',
+            timeout: 60000
+        });
+
+        // Wait for and fill username
+        await page.waitForSelector('input[autocomplete="username"]');
+        await page.type('input[autocomplete="username"]', config.TWITTER_CREDENTIALS.username);
+        await page.keyboard.press('Enter');
+
+        // Wait for and fill password
+        await page.waitForSelector('input[name="password"]');
+        await page.type('input[name="password"]', config.TWITTER_CREDENTIALS.password);
+        await page.keyboard.press('Enter');
+
+        // Wait for login to complete
+        await page.waitForSelector('[data-testid="primaryColumn"]', { timeout: 30000 });
+        
+        twitterLoggedIn = true;
+        return true;
+    } catch (error) {
+        console.error('Twitter login failed:', error);
+        return false;
+    }
+}
+
 async function getPageContent(url) {
     try {
         const unshortenedLink = await unshortenLink(url);
+
+        if (/^https?:\/\/(www\.)?(x|twitter)\.com\/[^\/]+\/?$/.test(unshortenedLink)) {
+            const browser = global.client.pupBrowser;
+            
+            if (!browser) {
+                throw new Error('Browser instance not available');
+            }
+            
+            const page = await browser.newPage();
+            
+            try {
+                // Handle login first if not already logged in
+                const loginSuccess = await loginToTwitter(page);
+                if (!loginSuccess) {
+                    throw new Error('Failed to login to Twitter');
+                }
+
+                // Configure longer timeout and better request handling
+                await page.setDefaultNavigationTimeout(120000);
+                await page.setRequestInterception(true);
+                page.on('request', (request) => {
+                    if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+                        request.abort();
+                    } else {
+                        request.continue();
+                    }
+                });
+
+                // Navigate to profile with better load handling
+                await page.goto(unshortenedLink);
+                
+                // Wait for content to load with multiple fallback selectors
+                await Promise.race([
+                    page.waitForSelector('article[data-testid="tweet"]'),
+                    page.waitForSelector('[data-testid="cellInnerDiv"]'),
+                    page.waitForSelector('[data-testid="tweetText"]')
+                ]);
+
+                // Additional wait to ensure dynamic content loads
+                await page.waitForFunction(() => {
+                    const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+                    return tweets.length > 0;
+                }, { timeout: 30000 });
+
+                // Extract tweet content and ID with better error handling
+                const result = await page.evaluate(() => {
+                    const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+                    if (!tweets.length) return null;
+
+                    const firstTweet = tweets[0];
+                    const tweetText = firstTweet.querySelector('[data-testid="tweetText"]')?.textContent;
+                    const tweetLink = firstTweet.querySelector('a[href*="/status/"]')?.href;
+                    const tweetId = tweetLink?.match(/\/status\/(\d+)/)?.[1];
+
+                    return {
+                        content: tweetText || 'No tweet text found',
+                        tweetId: tweetId || null
+                    };
+                });
+
+                await page.close();
+                return result;
+
+            } catch (error) {
+                console.log('Taking error screenshot...');
+                await page.screenshot({ 
+                    path: `twitter-error-${Date.now()}.png`,
+                    fullPage: true 
+                });
+                console.error('Twitter profile scraping error:', error);
+                await page.close();
+                throw error;
+            }
+        }
         
         if (unshortenedLink.includes('x.com') || unshortenedLink.includes('twitter.com')) {
             const browser = global.client.pupBrowser;
@@ -118,29 +223,62 @@ async function getPageContent(url) {
             
             const page = await browser.newPage();
             
-            await page.setRequestInterception(true);
-            page.on('request', (request) => {
-                if (['image', 'stylesheet', 'font'].includes(request.resourceType())) {
-                    request.abort();
-                } else {
-                    request.continue();
+            try {
+                // Handle login first if not already logged in
+                const loginSuccess = await loginToTwitter(page);
+                if (!loginSuccess) {
+                    throw new Error('Failed to login to Twitter');
                 }
-            });
 
-            await page.goto(unshortenedLink, { waitUntil: 'networkidle0', timeout: 30000 });
-            await page.waitForSelector('article[data-testid="tweet"]', { timeout: 5000 });
+                // Configure longer timeout and better request handling
+                await page.setDefaultNavigationTimeout(60000); // Increased to 60 seconds
+                await page.setRequestInterception(true);
+                page.on('request', (request) => {
+                    if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+                        request.abort();
+                    } else {
+                        request.continue();
+                    }
+                });
 
-            const content = await page.evaluate(() => {
-                const tweetElement = document.querySelector('article[data-testid="tweet"]');
-                if (tweetElement) {
-                    const tweetTextElement = tweetElement.querySelector('div[data-testid="tweetText"]');
-                    return tweetTextElement ? tweetTextElement.innerText : 'No tweet text found';
+                // Navigate to URL with less strict waiting condition
+                await page.goto(unshortenedLink, { 
+                    waitUntil: 'domcontentloaded', // Changed from networkidle0 to domcontentloaded
+                    timeout: 60000 
+                });
+
+                // Wait specifically for tweet text to be available
+                await page.waitForSelector('[data-testid="tweetText"]', { timeout: 30000 });
+
+                // Extract tweet content focusing on text
+                const content = await page.evaluate(() => {
+                    const tweetTextElement = document.querySelector('[data-testid="tweetText"]');
+                    if (tweetTextElement) {
+                        return tweetTextElement.innerText;
+                    }
+                    return 'Tweet content not found';
+                });
+
+                await page.close();
+                return content;
+
+            } catch (error) {
+                console.error('Error accessing Twitter content:', error);
+                // Take screenshot for debugging
+                try {
+                    const timestamp = Date.now();
+                    const screenshotPath = path.join(__dirname, `tweet-error-${timestamp}.png`);
+                    await page.screenshot({ 
+                        path: screenshotPath,
+                        fullPage: true 
+                    });
+                    console.log(`Error screenshot saved to: ${screenshotPath}`);
+                } catch (screenshotError) {
+                    console.error('Failed to take error screenshot:', screenshotError);
                 }
-                return 'Tweet not found';
-            });
-
-            await page.close();
-            return content;
+                await page.close();
+                throw error;
+            }
         } else {
             const response = await axios.get(unshortenedLink);
             const $ = cheerio.load(response.data);
@@ -163,6 +301,139 @@ async function getPageContent(url) {
         return null;
     }
 }
+
+// // Function to get page content
+// async function getPageContent(url) {
+//     try {
+//         const unshortenedLink = await unshortenLink(url);
+        
+//         // Special handling for Twitter/X profile pages
+//         if (/^https?:\/\/(www\.)?(x|twitter)\.com\/[^\/]+$/.test(unshortenedLink)) {
+//             const browser = global.client.pupBrowser;
+            
+//             if (!browser) {
+//                 throw new Error('Browser instance not available');
+//             }
+            
+//             const page = await browser.newPage();
+            
+//             try {
+//                 // Handle login first if not already logged in
+//                 const loginSuccess = await loginToTwitter(page);
+//                 if (!loginSuccess) {
+//                     throw new Error('Failed to login to Twitter');
+//                 }
+
+//                 // Configure longer timeout and better request handling
+//                 await page.setDefaultNavigationTimeout(120000);
+//                 await page.setRequestInterception(true);
+//                 page.on('request', (request) => {
+//                     if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+//                         request.abort();
+//                     } else {
+//                         request.continue();
+//                     }
+//                 });
+
+//                 // Navigate to profile with better load handling
+//                 await page.goto(unshortenedLink);
+                
+//                 // Wait for content to load with multiple fallback selectors
+//                 await Promise.race([
+//                     page.waitForSelector('article[data-testid="tweet"]'),
+//                     page.waitForSelector('[data-testid="cellInnerDiv"]'),
+//                     page.waitForSelector('[data-testid="tweetText"]')
+//                 ]);
+
+//                 // Additional wait to ensure dynamic content loads
+//                 await page.waitForFunction(() => {
+//                     const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+//                     return tweets.length > 0;
+//                 }, { timeout: 30000 });
+
+//                 // Extract tweet content and ID with better error handling
+//                 const result = await page.evaluate(() => {
+//                     const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+//                     if (!tweets.length) return null;
+
+//                     const firstTweet = tweets[0];
+//                     const tweetText = firstTweet.querySelector('[data-testid="tweetText"]')?.textContent;
+//                     const tweetLink = firstTweet.querySelector('a[href*="/status/"]')?.href;
+//                     const tweetId = tweetLink?.match(/\/status\/(\d+)/)?.[1];
+
+//                     return {
+//                         content: tweetText || 'No tweet text found',
+//                         tweetId: tweetId || null
+//                     };
+//                 });
+
+//                 await page.close();
+//                 return result;
+
+//             } catch (error) {
+//                 console.log('Taking error screenshot...');
+//                 await page.screenshot({ 
+//                     path: `twitter-error-${Date.now()}.png`,
+//                     fullPage: true 
+//                 });
+//                 console.error('Twitter profile scraping error:', error);
+//                 await page.close();
+//                 throw error;
+//             }
+//         }
+        
+//         // Original handling for Twitter posts and other URLs
+//         if (unshortenedLink.includes('x.com') || unshortenedLink.includes('twitter.com')) {
+//             return await handleTwitterPost(unshortenedLink);
+//         }
+        
+//         // Rest of the original function for other URLs
+//         const response = await axios.get(unshortenedLink);
+//         const $ = cheerio.load(response.data);
+//         let content = $('body').text();
+//         content = content.substring(0, 50000).trim();
+//         content = content.replace(/\s+/g, ' ');
+//         return content;
+//     } catch (error) {
+//         console.error('An error occurred in the getPageContent function:', error);
+//         return null;
+//     }
+// }
+
+// // Helper function to handle Twitter posts (existing functionality)
+// async function handleTwitterPost(url) {
+//     const browser = global.client.pupBrowser;
+//     const page = await browser.newPage();
+    
+//     try {
+//         await page.setRequestInterception(true);
+//         page.on('request', (request) => {
+//             if (['image', 'stylesheet', 'font'].includes(request.resourceType())) {
+//                 request.abort();
+//             } else {
+//                 request.continue();
+//             }
+//         });
+
+//         await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+//         await page.waitForSelector('article[data-testid="tweet"]', { timeout: 5000 });
+
+//         const content = await page.evaluate(() => {
+//             const tweetElement = document.querySelector('article[data-testid="tweet"]');
+//             if (tweetElement) {
+//                 const tweetTextElement = tweetElement.querySelector('div[data-testid="tweetText"]');
+//                 return tweetTextElement ? tweetTextElement.innerText : 'No tweet text found';
+//             }
+//             return 'Tweet not found';
+//         });
+
+//         await page.close();
+//         return content;
+//     } catch (error) {
+//         await page.close();
+//         throw error;
+//     }
+// }
 
 // Function to search Google for an image
 async function searchGoogleForImage(query) {
@@ -347,6 +618,25 @@ async function improvePrompt(prompt) {
     return improvedPrompt.trim();
 }
 
+async function getPageContentWithRetry(url, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const content = await getPageContent(url);
+            if (content) return content;
+            
+            // Wait between retries with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        } catch (error) {
+            console.error(`Attempt ${i + 1} failed:`, error);
+            if (i === maxRetries - 1) throw error;
+            
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+        }
+    }
+    return null;
+}
+
 module.exports = {
     Client,
     LocalAuth,
@@ -377,5 +667,6 @@ module.exports = {
     parseXML,
     getRelativeTime,
     generateImage,
-    improvePrompt
+    improvePrompt,
+    getPageContentWithRetry
 };

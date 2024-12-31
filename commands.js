@@ -342,12 +342,10 @@ async function handleResumoSticker(message) {
                 await message.reply('Não consegui acessar o link para gerar um resumo.');
             }
         } else {
-            // Case 1b: Quoted message without link - summarize quoted message
+            // Case 1b: Quoted message without link - summarize quoted message only
             const contact = await quotedMessage.getContact();
             const name = contact.name || 'Unknown';
-            const prompt = config.PROMPTS.HOUR_SUMMARY
-                .replace('{name}', name)
-                .replace('{messageTexts}', `>>${name}: ${quotedText}.\n`);
+            const prompt = `Por favor, resuma esta mensagem de ${name}:\n\n${quotedText}`;
             const result = await runCompletion(prompt, 1);
             await message.reply(result.trim());
         }
@@ -515,6 +513,36 @@ async function handleDesenhoCommand(message, command, promptInput) {
     }
 }
 
+async function handleTwitterDebug(message) {
+    try {
+        console.log('handleTwitterDebug activated');
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+        
+        const results = [];
+        for (const account of config.TWITTER_ACCOUNTS) {
+            try {
+                const twitterUrl = `https://x.com/${account.username}`;
+                const result = await getPageContent(twitterUrl);
+                
+                if (!result || !result.content || !result.tweetId) {
+                    results.push(`Failed to fetch content for @${account.username}`);
+                    continue;
+                }
+
+                results.push(`@${account.username}:\nLast Tweet ID: ${account.lastTweetId}\nLatest Tweet ID: ${result.tweetId}\nContent: ${result.content}\nURL: https://x.com/${account.username}/status/${result.tweetId}${result.links?.length ? '\nLinks: ' + result.links.join('\n') : ''}`);
+            } catch (error) {
+                results.push(`Error checking @${account.username}: ${error.message}`);
+            }
+        }
+        
+        await message.reply(results.join('\n\n'));
+    } catch (error) {
+        console.error('Error in handleTwitterDebug:', error);
+        await message.reply(`Debug error: ${error.message}`);
+    }
+}
+
 module.exports = {
     handleResumoCommand,
     handleStickerMessage,
@@ -529,5 +557,6 @@ module.exports = {
     handleAyubNewsSticker,
     handleAyubNewsFut,
     handleAyubNewsSearch,
-    handleDesenhoCommand
+    handleDesenhoCommand,
+    handleTwitterDebug
 };
