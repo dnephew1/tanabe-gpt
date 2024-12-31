@@ -17,12 +17,13 @@ const {
     parseXML,
     getRelativeTime,
     generateImage,
-    improvePrompt
+    improvePrompt,
+    transcribeAudio,
+    fsPromises
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs').promises;
 const { getMessageHistory } = require('./messageLogger');
 
 // Helper function to delete messages after a timeout
@@ -231,6 +232,7 @@ Comandos disponíveis:
 *@cartola* - Menciona os jogadores de Cartola do grupo
 *#desenho [descrição]* - Gera uma imagem com base na descrição fornecida
 *!clearcache* - (Apenas para admin) Limpa o cache do bot
+*Mensagens de Áudio* - Transcreve automaticamente mensagens de áudio para texto
 *#?* - Lista de comandos disponíveis
     `;
 
@@ -258,7 +260,7 @@ async function handleStickerCreation(message) {
             const imagePath = path.join(__dirname, `quoted_image_${Date.now()}.jpg`);
             
             try {
-                await fs.writeFile(imagePath, attachmentData.data, 'base64');
+                await fsPromises.writeFile(imagePath, attachmentData.data, 'base64');
                 const imageAsSticker = MessageMedia.fromFilePath(imagePath);
                 await message.reply(imageAsSticker, message.from, { sendMediaAsSticker: true });
             } catch (error) {
@@ -541,6 +543,42 @@ async function handleTwitterDebug(message) {
     }
 }
 
+async function handleAudioMessage(message) {
+    console.log('handleAudioMessage activated');
+    const chat = await message.getChat();
+    
+    try {
+        // Download the audio
+        const audioData = await message.downloadMedia();
+        const audioPath = path.join(__dirname, `audio_${Date.now()}.ogg`);
+        
+        try {
+            // Save audio temporarily
+            await fsPromises.writeFile(audioPath, audioData.data, 'base64');
+            
+            // Transcribe the audio
+            const transcription = await transcribeAudio(audioPath);
+            
+            // Reply with formatted transcription
+            await message.reply(`Transcrição:\n_${transcription}_`);
+            
+        } catch (error) {
+            console.error('Error processing audio:', error);
+            message.reply('Desculpe, não consegui transcrever o áudio.')
+                .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+                .catch(error => console.error('Failed to send error message:', error));
+        } finally {
+            // Delete the temporary audio file
+            await deleteFile(audioPath);
+        }
+    } catch (error) {
+        console.error('Error downloading audio:', error);
+        message.reply('Desculpe, não consegui baixar o áudio.')
+            .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
+            .catch(error => console.error('Failed to send error message:', error));
+    }
+}
+
 module.exports = {
     handleResumoCommand,
     handleStickerMessage,
@@ -556,5 +594,6 @@ module.exports = {
     handleAyubNewsFut,
     handleAyubNewsSearch,
     handleDesenhoCommand,
-    handleTwitterDebug
+    handleTwitterDebug,
+    handleAudioMessage
 };
