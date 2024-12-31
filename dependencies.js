@@ -111,8 +111,24 @@ async function loginToTwitter(page) {
     if (twitterLoggedIn) return true;
     
     try {
+        // First try to access x.com/login to check if we're already logged in
+        await page.goto('https://x.com/login', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
+        // Wait a moment for potential redirect
+        await page.waitForTimeout(2000);
+        // Check if we were redirected to home (meaning we're logged in)
+        const currentUrl = page.url();
+        if (currentUrl.includes('x.com/home')) {
+            console.log('Already logged into Twitter');
+            twitterLoggedIn = true;
+            return true;
+        }
+
+        // If we're not logged in, proceed with login
         await page.goto('https://twitter.com/i/flow/login', {
-            waitUntil: 'networkidle0',
+            waitUntil: 'domcontentloaded',
             timeout: 60000
         });
 
@@ -140,6 +156,7 @@ async function loginToTwitter(page) {
 async function getPageContent(url) {
     try {
         const unshortenedLink = await unshortenLink(url);
+        const maxRetries = 3;
 
         if (/^https?:\/\/(www\.)?(x|twitter)\.com\/[^\/]+\/?$/.test(unshortenedLink)) {
             const browser = global.client.pupBrowser;
@@ -148,70 +165,105 @@ async function getPageContent(url) {
                 throw new Error('Browser instance not available');
             }
             
-            const page = await browser.newPage();
-            
-            try {
-                // Handle login first if not already logged in
-                const loginSuccess = await loginToTwitter(page);
-                if (!loginSuccess) {
-                    throw new Error('Failed to login to Twitter');
-                }
-
-                // Configure longer timeout and better request handling
-                await page.setDefaultNavigationTimeout(120000);
-                await page.setRequestInterception(true);
-                page.on('request', (request) => {
-                    if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
-                        request.abort();
-                    } else {
-                        request.continue();
-                    }
-                });
-
-                // Navigate to profile with better load handling
-                await page.goto(unshortenedLink);
+            let lastError;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                const page = await browser.newPage();
                 
-                // Wait for content to load with multiple fallback selectors
-                await Promise.race([
-                    page.waitForSelector('article[data-testid="tweet"]'),
-                    page.waitForSelector('[data-testid="cellInnerDiv"]'),
-                    page.waitForSelector('[data-testid="tweetText"]')
-                ]);
+                try {
+                    console.log(`Profile check attempt ${attempt}/${maxRetries}`);
+                    
+                    // Handle login first if not already logged in
+                    const loginSuccess = await loginToTwitter(page);
+                    if (!loginSuccess) {
+                        throw new Error('Failed to login to Twitter');
+                    }
 
-                // Additional wait to ensure dynamic content loads
-                await page.waitForFunction(() => {
-                    const tweets = document.querySelectorAll('article[data-testid="tweet"]');
-                    return tweets.length > 0;
-                }, { timeout: 30000 });
+                    // Configure longer timeout and better request handling
+                    await page.setDefaultNavigationTimeout(120000);
+                    await page.setRequestInterception(true);
+                    page.on('request', (request) => {
+                        if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
+                            request.abort();
+                        } else {
+                            request.continue();
+                        }
+                    });
 
-                // Extract tweet content and ID with better error handling
-                const result = await page.evaluate(() => {
-                    const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-                    if (!tweets.length) return null;
+                    // Navigate to profile with better load handling
+                    await page.goto(unshortenedLink, {
+                        waitUntil: 'domcontentloaded',
+                        timeout: 60000
+                    });
+                    
+                    // Wait for content to load with multiple fallback selectors
+                    await Promise.race([
+                        page.waitForSelector('article[data-testid="tweet"]'),
+                        page.waitForSelector('[data-testid="cellInnerDiv"]'),
+                        page.waitForSelector('[data-testid="tweetText"]')
+                    ]);
 
-                    const firstTweet = tweets[0];
-                    const tweetText = firstTweet.querySelector('[data-testid="tweetText"]')?.textContent;
-                    const tweetLink = firstTweet.querySelector('a[href*="/status/"]')?.href;
-                    const tweetId = tweetLink?.match(/\/status\/(\d+)/)?.[1];
+                    // Additional wait to ensure dynamic content loads
+                    await page.waitForFunction(() => {
+                        const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+                        return tweets.length > 0;
+                    }, { timeout: 30000 });
 
-                    return {
-                        content: tweetText || 'No tweet text found',
-                        tweetId: tweetId || null
-                    };
-                });
+                    // Extract tweet content and ID with better error handling
+                    const result = await page.evaluate(() => {
+                        const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+                        if (!tweets.length) return null;
 
-                await page.close();
-                return result;
+                        // Find the first non-pinned tweet
+                        const firstNonPinnedTweet = tweets.find(tweet => {
+                            // Check for pinned tweet indicator
+                            const isPinned = tweet.querySelector('[data-testid="socialContext"]')?.textContent?.includes('Pinned');
+                            return !isPinned;
+                        });
 
-            } catch (error) {
-                console.log('Taking error screenshot...');
-                await page.screenshot({ 
-                    path: `twitter-error-${Date.now()}.png`,
-                    fullPage: true 
-                });
-                console.error('Twitter profile scraping error:', error);
-                await page.close();
-                throw error;
+                        if (!firstNonPinnedTweet) return null;
+
+                        const tweetText = firstNonPinnedTweet.querySelector('[data-testid="tweetText"]')?.textContent;
+                        const tweetLink = firstNonPinnedTweet.querySelector('a[href*="/status/"]')?.href;
+                        const tweetId = tweetLink?.match(/\/status\/(\d+)/)?.[1];
+
+                        return {
+                            content: tweetText || 'No tweet text found',
+                            tweetId: tweetId || null
+                        };
+                    });
+
+                    await page.close();
+                    if (result && result.content && result.tweetId) {
+                        return result;
+                    }
+                    throw new Error('Failed to extract tweet content or ID');
+
+                } catch (error) {
+                    lastError = error;
+                    console.log(`Profile check attempt ${attempt} failed:`, error.message);
+                    
+                    try {
+                        await page.screenshot({ 
+                            path: 'debug.png',
+                            fullPage: true 
+                        });
+                        console.log('Debug screenshot saved');
+                    } catch (screenshotError) {
+                        console.error('Failed to take debug screenshot:', screenshotError);
+                    }
+                    
+                    await page.close();
+                    
+                    if (attempt === maxRetries) {
+                        console.error('All profile check attempts failed');
+                        throw lastError;
+                    }
+                    
+                    // Wait before retry with exponential backoff
+                    const delay = Math.pow(2, attempt) * 1000;
+                    console.log(`Waiting ${delay}ms before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
         }
         
@@ -267,15 +319,13 @@ async function getPageContent(url) {
                 console.error('Error accessing Twitter content:', error);
                 // Take screenshot for debugging
                 try {
-                    const timestamp = Date.now();
-                    const screenshotPath = path.join(__dirname, `tweet-error-${timestamp}.png`);
                     await page.screenshot({ 
-                        path: screenshotPath,
+                        path: 'debug.png',
                         fullPage: true 
                     });
-                    console.log(`Error screenshot saved to: ${screenshotPath}`);
+                    console.log('Debug screenshot saved');
                 } catch (screenshotError) {
-                    console.error('Failed to take error screenshot:', screenshotError);
+                    console.error('Failed to take debug screenshot:', screenshotError);
                 }
                 await page.close();
                 throw error;
