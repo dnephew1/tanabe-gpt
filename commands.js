@@ -337,9 +337,9 @@ async function handleResumoSticker(message) {
                 const pageContent = await getPageContent(unshortenedLink);
                 const prompt = config.PROMPTS.LINK_SUMMARY.replace('{pageContent}', pageContent);
                 const summary = await runCompletion(prompt, 1);
-                await message.reply(summary);
+                await quotedMessage.reply(summary);
             } catch (error) {
-                await message.reply('Não consegui acessar o link para gerar um resumo.');
+                await quotedMessage.reply('Não consegui acessar o link para gerar um resumo.');
             }
         } else {
             // Case 1b: Quoted message without link - summarize quoted message only
@@ -347,7 +347,7 @@ async function handleResumoSticker(message) {
             const name = contact.name || 'Unknown';
             const prompt = `Por favor, resuma esta mensagem de ${name}:\n\n${quotedText}`;
             const result = await runCompletion(prompt, 1);
-            await message.reply(result.trim());
+            await quotedMessage.reply(result.trim());
         }
     } else {
         // Case 2: No quoted message - summarize last 3 hours
@@ -445,8 +445,6 @@ async function handleAyubNewsFut(message) {
 
 async function handleAyubNewsSearch(message, input) {
     console.log('handleAyubNewsSearch activated');
-    const chat = await message.getChat();
-    
 
     const keywords = input.slice(1).join(' ');
     const query = encodeURIComponent(keywords);
@@ -530,7 +528,7 @@ async function handleTwitterDebug(message) {
                     continue;
                 }
 
-                results.push(`@${account.username}:\nLast Tweet ID: ${account.lastTweetId}\nLatest Tweet ID: ${result.tweetId}\nContent: ${result.content}\nURL: https://x.com/${account.username}/status/${result.tweetId}${result.links?.length ? '\nLinks: ' + result.links.join('\n') : ''}`);
+                results.push(`@${account.username}:\nLast Tweet ID: ${account.lastTweetId}\nLatest Tweet ID: ${result.tweetId}\nContent: ${result.content}\nURL: https://x.com/${account.username}/status/${result.tweetId}`);
             } catch (error) {
                 results.push(`Error checking @${account.username}: ${error.message}`);
             }
