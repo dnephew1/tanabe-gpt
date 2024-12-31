@@ -107,166 +107,11 @@ async function unshortenLink(link) {
 
 let twitterLoggedIn = false;
 
-async function loginToTwitter(page) {
-    if (twitterLoggedIn) return true;
-    
-    try {
-        // First try to access x.com/login to check if we're already logged in
-        await page.goto('https://x.com/login', {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
-        });
-        // Wait a moment for potential redirect
-        await page.waitForTimeout(2000);
-        // Check if we were redirected to home (meaning we're logged in)
-        const currentUrl = page.url();
-        if (currentUrl.includes('x.com/home')) {
-            console.log('Already logged into Twitter');
-            twitterLoggedIn = true;
-            return true;
-        }
-
-        // If we're not logged in, proceed with login
-        await page.goto('https://twitter.com/i/flow/login', {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000
-        });
-
-        // Wait for and fill username
-        await page.waitForSelector('input[autocomplete="username"]');
-        await page.type('input[autocomplete="username"]', config.TWITTER_CREDENTIALS.username);
-        await page.keyboard.press('Enter');
-
-        // Wait for and fill password
-        await page.waitForSelector('input[name="password"]');
-        await page.type('input[name="password"]', config.TWITTER_CREDENTIALS.password);
-        await page.keyboard.press('Enter');
-
-        // Wait for login to complete
-        await page.waitForSelector('[data-testid="primaryColumn"]', { timeout: 30000 });
-        
-        twitterLoggedIn = true;
-        return true;
-    } catch (error) {
-        console.error('Twitter login failed:', error);
-        return false;
-    }
-}
-
 async function getPageContent(url) {
     try {
         const unshortenedLink = await unshortenLink(url);
         const maxRetries = 3;
 
-        if (/^https?:\/\/(www\.)?(x|twitter)\.com\/[^\/]+\/?$/.test(unshortenedLink)) {
-            const browser = global.client.pupBrowser;
-            
-            if (!browser) {
-                throw new Error('Browser instance not available');
-            }
-            
-            let lastError;
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                const page = await browser.newPage();
-                
-                try {
-                    console.log(`Profile check attempt ${attempt}/${maxRetries}`);
-                    
-                    // Handle login first if not already logged in
-                    const loginSuccess = await loginToTwitter(page);
-                    if (!loginSuccess) {
-                        throw new Error('Failed to login to Twitter');
-                    }
-
-                    // Configure longer timeout and better request handling
-                    await page.setDefaultNavigationTimeout(120000);
-                    await page.setRequestInterception(true);
-                    page.on('request', (request) => {
-                        if (['image', 'stylesheet', 'font', 'media'].includes(request.resourceType())) {
-                            request.abort();
-                        } else {
-                            request.continue();
-                        }
-                    });
-
-                    // Navigate to profile with better load handling
-                    await page.goto(unshortenedLink, {
-                        waitUntil: 'domcontentloaded',
-                        timeout: 60000
-                    });
-                    
-                    // Wait for content to load with multiple fallback selectors
-                    await Promise.race([
-                        page.waitForSelector('article[data-testid="tweet"]'),
-                        page.waitForSelector('[data-testid="cellInnerDiv"]'),
-                        page.waitForSelector('[data-testid="tweetText"]')
-                    ]);
-
-                    // Additional wait to ensure dynamic content loads
-                    await page.waitForFunction(() => {
-                        const tweets = document.querySelectorAll('article[data-testid="tweet"]');
-                        return tweets.length > 0;
-                    }, { timeout: 30000 });
-
-                    // Extract tweet content and ID with better error handling
-                    const result = await page.evaluate(() => {
-                        const tweets = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-                        if (!tweets.length) return null;
-
-                        // Find the first non-pinned tweet
-                        const firstNonPinnedTweet = tweets.find(tweet => {
-                            // Check for pinned tweet indicator
-                            const isPinned = tweet.querySelector('[data-testid="socialContext"]')?.textContent?.includes('Pinned');
-                            return !isPinned;
-                        });
-
-                        if (!firstNonPinnedTweet) return null;
-
-                        const tweetText = firstNonPinnedTweet.querySelector('[data-testid="tweetText"]')?.textContent;
-                        const tweetLink = firstNonPinnedTweet.querySelector('a[href*="/status/"]')?.href;
-                        const tweetId = tweetLink?.match(/\/status\/(\d+)/)?.[1];
-
-                        return {
-                            content: tweetText || 'No tweet text found',
-                            tweetId: tweetId || null
-                        };
-                    });
-
-                    await page.close();
-                    if (result && result.content && result.tweetId) {
-                        return result;
-                    }
-                    throw new Error('Failed to extract tweet content or ID');
-
-                } catch (error) {
-                    lastError = error;
-                    console.log(`Profile check attempt ${attempt} failed:`, error.message);
-                    
-                    try {
-                        await page.screenshot({ 
-                            path: 'debug.png',
-                            fullPage: true 
-                        });
-                        console.log('Debug screenshot saved');
-                    } catch (screenshotError) {
-                        console.error('Failed to take debug screenshot:', screenshotError);
-                    }
-                    
-                    await page.close();
-                    
-                    if (attempt === maxRetries) {
-                        console.error('All profile check attempts failed');
-                        throw lastError;
-                    }
-                    
-                    // Wait before retry with exponential backoff
-                    const delay = Math.pow(2, attempt) * 1000;
-                    console.log(`Waiting ${delay}ms before retry...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-        
         if (unshortenedLink.includes('x.com') || unshortenedLink.includes('twitter.com')) {
             const browser = global.client.pupBrowser;
             
@@ -277,12 +122,6 @@ async function getPageContent(url) {
             const page = await browser.newPage();
             
             try {
-                // Handle login first if not already logged in
-                const loginSuccess = await loginToTwitter(page);
-                if (!loginSuccess) {
-                    throw new Error('Failed to login to Twitter');
-                }
-
                 // Configure longer timeout and better request handling
                 await page.setDefaultNavigationTimeout(60000); // Increased to 60 seconds
                 await page.setRequestInterception(true);
@@ -570,6 +409,72 @@ async function transcribeAudio(audioPath) {
     }
 }
 
+async function getTweetCount(username) {
+    let page = null;
+    try {
+        const url = `https://socialblade.com/twitter/user/${username}`;
+        const browser = global.client.pupBrowser;
+        
+        if (!browser) {
+            throw new Error('Browser instance not available');
+        }
+        
+        // Create new page with minimal resources
+        page = await browser.newPage();
+        
+        // Minimize memory usage
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+            if (['image', 'stylesheet', 'font', 'media', 'script'].includes(request.resourceType())) {
+                request.abort();
+            } else {
+                request.continue();
+            }
+        });
+
+        // Minimize memory usage
+        await page.setJavaScriptEnabled(false);
+        
+        // Navigate with minimal wait time
+        await page.goto(url, { 
+            waitUntil: 'domcontentloaded',
+            timeout: 15000 
+        });
+
+        // Get tweet count using XPath for more precise selection
+        const tweetCount = await page.evaluate(() => {
+            const elements = document.querySelectorAll('.YouTubeUserTopInfo');
+            for (const element of elements) {
+                if (element.textContent.includes('Tweets')) {
+                    const countElement = element.querySelector('span[style="font-weight: bold;"]');
+                    if (countElement) {
+                        return parseInt(countElement.textContent.replace(/,/g, ''));
+                    }
+                }
+            }
+            return null;
+        });
+
+        if (!tweetCount) {
+            throw new Error('Failed to find tweet count element');
+        }
+        
+        return tweetCount;
+    } catch (error) {
+        console.error(`Error getting tweet count for ${username}:`, error);
+        throw error;
+    } finally {
+        // Ensure page is always closed
+        if (page) {
+            try {
+                await page.close();
+            } catch (closeError) {
+                console.error('Error closing page:', closeError);
+            }
+        }
+    }
+}
+
 module.exports = {
     Client,
     LocalAuth,
@@ -603,5 +508,6 @@ module.exports = {
     generateImage,
     improvePrompt,
     getPageContentWithRetry,
-    transcribeAudio
+    transcribeAudio,
+    getTweetCount
 };
