@@ -11,7 +11,8 @@ const {
     handleAyubLinkSummary,
     handleCacheClearCommand,
     handleStickerCreation,
-    handleTwitterDebug
+    handleTwitterDebug,
+    handleAudioMessage
 } = require('./commands');
 const { handleCorrenteResumoCommand } = require('./periodicSummary');
 const { initializeMessageLog, logMessage } = require('./messageLogger');
@@ -52,6 +53,12 @@ async function setupListeners(client) {
                     const participants = await group1.participants;
                     isGroup1Participant = participants.some(p => p.id._serialized === message.from);
                 }
+            }
+
+            // Handle audio messages in Group1 or admin chat
+            if ((isGroup1 || isAdminChat) && message.hasMedia && (message.type === 'audio' || message.type === 'ptt')) {
+                await handleAudioMessage(message);
+                return;
             }
 
             // First check for stickers in Group1 or from Group1 participants

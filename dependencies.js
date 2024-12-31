@@ -12,7 +12,8 @@
     // scrapeNews2
 
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const fs = require('fs').promises;
+const fsPromises = require('fs').promises;
+const fs = require('fs');
 const qrcode = require('qrcode-terminal');
 const OpenAI = require('openai');
 const puppeteer = require('puppeteer');
@@ -481,7 +482,7 @@ async function downloadImage(url) {
 // Function to delete a file
 async function deleteFile(filePath) {
     try {
-        await fs.unlink(filePath);
+        await fsPromises.unlink(filePath);
         console.log('File deleted successfully');
     } catch (error) {
         console.error('Error deleting file:', error);
@@ -637,10 +638,26 @@ async function getPageContentWithRetry(url, maxRetries = 3) {
     return null;
 }
 
+// Function to transcribe audio using OpenAI's Whisper model
+async function transcribeAudio(audioPath) {
+    try {
+        const transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-1",
+            language: "pt"
+        });
+        return transcription.text;
+    } catch (error) {
+        console.error('Error transcribing audio:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     Client,
     LocalAuth,
     MessageMedia,
+    fsPromises,
     fs,
     qrcode,
     OpenAI,
@@ -668,5 +685,6 @@ module.exports = {
     getRelativeTime,
     generateImage,
     improvePrompt,
-    getPageContentWithRetry
+    getPageContentWithRetry,
+    transcribeAudio
 };
