@@ -8,7 +8,6 @@ async function initializeTwitterMonitor() {
     // Start monitoring loop
     setInterval(checkTwitterUpdates, config.TWITTER_CHECK_INTERVAL);
     isInitialized = true;
-    console.log('Twitter monitor initialized');
 }
 
 async function checkTwitterUpdates() {
