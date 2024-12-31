@@ -6,6 +6,7 @@ const { config, notifyAdmin } = require('./dependencies');
 const { setupListeners } = require('./listener');
 const { runPeriodicSummary } = require('./periodicSummary');
 const { initializeMessageLog } = require('./messageLogger');
+const { initializeTwitterMonitor } = require('./twitterMonitor');
 
 let cacheManagement;
 if (config.ENABLE_STARTUP_CACHE_CLEARING) {
@@ -62,6 +63,8 @@ client.on('ready', async () => {
     scheduleNextSummary(); // Schedule the periodic summary
 
     console.log("Bot initialization completed");
+
+    await initializeTwitterMonitor();
 });
 
 // Reconnect on disconnection

@@ -10,7 +10,8 @@ const {
     handleStickerMessage,
     handleAyubLinkSummary,
     handleCacheClearCommand,
-    handleStickerCreation
+    handleStickerCreation,
+    handleTwitterDebug
 } = require('./commands');
 const { handleCorrenteResumoCommand } = require('./periodicSummary');
 const { initializeMessageLog, logMessage } = require('./messageLogger');
@@ -78,6 +79,8 @@ async function setupListeners(client) {
                 } else if (isGroup2 && messageBody.startsWith('#resumo')) {
                     await handleCorrenteResumoCommand(message, input);
                 }
+            } else if (isAdminChat && messageBody === '!twitterdebug') {
+                await handleTwitterDebug(message);
             }
 
             // Handle mentions/tags only in Group1
