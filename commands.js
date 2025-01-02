@@ -20,7 +20,6 @@ const {
     improvePrompt,
     transcribeAudio,
     fsPromises,
-    getTweetCount
 } = require('./dependencies');
 const { performCacheClearing } = require('./cacheManagement');
 const crypto = require('crypto');
@@ -216,29 +215,8 @@ async function handleCommandList(message) {
     console.log(`[LOG] [${new Date().toISOString()}] handleCommandList activated`);
     const chat = await message.getChat();
     
-
-    const commandList = `
-Comandos disponíveis:
-*# [pergunta]* - ChatGPT irá responder sua pergunta. (Se adicionar '!' após '#' ChatGPT irá adicionar humor em sua resposta)
-*Sticker Resumo* - Resume a última hora de mensagens (pode ser usado para resumir mensagens e links se enviado como resposta à mensagem a ser resumida)
-*#resumo [número]* - Resume as últimas [número] mensagens
-*Sticker Ayub News* - Notícias relevantes do dia
-*#ayubnews [palavra-chave]* - Notícias sobre a palavra-chave
-*#ayubnews fut* - Notícias sobre futebol
-*#sticker [palavra-chave]* - Pesquisa uma imagem e transforma em sticker
-*@all* - Menciona todos os membros do grupo
-*@admin* - Menciona todos os administradores do grupo
-*@medicos* - Menciona os médicos no grupo
-*@engenheiros* - Menciona os engenheiros no grupo
-*@cartola* - Menciona os jogadores de Cartola do grupo
-*#desenho [descrição]* - Gera uma imagem com base na descrição fornecida
-*!clearcache* - (Apenas para admin) Limpa o cache do bot
-*Mensagens de Áudio* - Transcreve automaticamente mensagens de áudio para texto
-*#?* - Lista de comandos disponíveis
-    `;
-
     try {
-        const sentMessage = await message.reply(commandList);
+        const sentMessage = await message.reply(config.COMMAND_LIST);
         await deleteMessageAfterTimeout(sentMessage, true);
     } catch (error) {
         console.error(`[LOG] [${new Date().toISOString()}] Failed to send command list:`, error);
@@ -540,57 +518,43 @@ async function handleTwitterDebug(message) {
         
         const chat = await message.getChat();
         await chat.sendStateTyping();
-        
-        const results = [];
-        for (const account of config.TWITTER_ACCOUNTS) {
-            try {
-                // Get current tweet count from SocialBlade
-                const currentTweetCount = await getTweetCount(account.username);
-                
-                // Get latest tweets using the user ID directly
-                const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
-                const response = await axios.get(twitterApiUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${config.TWITTER_BEARER_TOKEN}`
-                    }
-                });
-                
-                let tweetInfo = 'No tweets found';
-                if (response.data && response.data.data && response.data.data.length > 0) {
-                    const tweets = response.data.data;
-                    const latestTweet = tweets[0];
-                    const olderTweets = tweets.slice(1);
 
-                    // Prepare the evaluation prompt
-                    const prompt = config.PROMPTS.EVALUATE_NEWS
-                        .replace('{post}', latestTweet.text)
-                        .replace('{previous_posts}', olderTweets.map(t => t.text).join('\n\n'));
-
-                    // Evaluate the news using ChatGPT
-                    const evaluation = await runCompletion(prompt, 1);
-                    
-                    tweetInfo = `Latest Tweet Text: ${latestTweet.text}\nEvaluation Result: ${evaluation.trim()}`;
+        const account = config.TWITTER_ACCOUNTS[0]; // Only use the first account
+        try {
+            // Get latest 5 tweets using Twitter API
+            const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
+            const response = await axios.get(twitterApiUrl, {
+                headers: {
+                    'Authorization': `Bearer ${config.TWITTER_BEARER_TOKEN}`
                 }
-                
-                results.push(`@${account.username}:
-                Last Tweet ID: ${account.lastTweetId}
-                Stored Tweet Count: ${account.lastTweetCount}
-                Current Tweet Count: ${currentTweetCount}
-                ${tweetInfo}`);
+            });
+            
+            let debugInfo = 'No tweets found';
+            if (response.data && response.data.data && response.data.data.length > 0) {
+                const tweets = response.data.data;
+                const latestTweet = tweets[0];
+                const olderTweets = tweets.slice(1);
 
-                // Add delay between accounts to avoid rate limits
-                if (config.TWITTER_ACCOUNTS.length > 1) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-            } catch (error) {
-                results.push(`Error checking @${account.username}: ${error.message}`);
-                console.error(`[LOG] [${new Date().toISOString()}] Detailed error for ${account.username}:`, error.response?.data || error);
+                // Prepare the evaluation prompt
+                const prompt = config.PROMPTS.EVALUATE_NEWS
+                    .replace('{post}', latestTweet.text)
+                    .replace('{previous_posts}', olderTweets.map(t => t.text).join('\n\n'));
+
+                // Evaluate the news using ChatGPT
+                const evaluation = await runCompletion(prompt, 1);
+                
+                debugInfo = `Latest Tweet ID: ${latestTweet.id}
+                Stored Tweet ID: ${account.lastTweetId}
+                Would Send to Group: ${latestTweet.id !== account.lastTweetId ? 'Yes' : 'No (Already Sent)'}
+                Latest Tweet Text: ${latestTweet.text}
+                Evaluation Result: ${evaluation.trim()}`;
             }
+            
+            await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every 15 minutes.`);
+        } catch (error) {
+            console.error(`[LOG] [${new Date().toISOString()}] Detailed error for ${account.username}:`, error.response?.data || error);
+            await message.reply(`Error checking @${account.username}: ${error.message}`);
         }
-        
-        // Send debug info to admin
-        const debugInfo = results.join('\n\n');
-        await message.reply(debugInfo);
     } catch (error) {
         console.error(`[LOG] [${new Date().toISOString()}] Error in handleTwitterDebug:`, error);
         await message.reply(`Debug error: ${error.message}`);

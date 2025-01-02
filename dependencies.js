@@ -409,70 +409,96 @@ async function transcribeAudio(audioPath) {
 
 async function getTweetCount(username) {
     let page = null;
-    try {
-        const url = `https://socialblade.com/twitter/user/${username}`;
-        const browser = global.client.pupBrowser;
-        
-        if (!browser) {
-            throw new Error('Browser instance not available');
-        }
-        
-        // Create new page with minimal resources
-        page = await browser.newPage();
-        
-        // Minimize memory usage
-        await page.setRequestInterception(true);
-        page.on('request', (request) => {
-            if (['image', 'stylesheet', 'font', 'media', 'script'].includes(request.resourceType())) {
-                request.abort();
-            } else {
-                request.continue();
+    let retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = 5000; // 5 seconds
+
+    while (retryCount < maxRetries) {
+        try {
+            const url = `https://socialblade.com/twitter/user/${username}`;
+            const browser = global.client.pupBrowser;
+            
+            if (!browser) {
+                throw new Error('Browser instance not available');
             }
-        });
+            
+            // Create new page with minimal resources
+            page = await browser.newPage();
+            
+            // Set a custom user agent to look more like a regular browser
+            await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+            
+            // Minimize memory usage
+            await page.setRequestInterception(true);
+            page.on('request', (request) => {
+                if (['image', 'stylesheet', 'font', 'media', 'script'].includes(request.resourceType())) {
+                    request.abort();
+                } else {
+                    request.continue();
+                }
+            });
 
-        // Minimize memory usage
-        await page.setJavaScriptEnabled(false);
-        
-        // Navigate with minimal wait time
-        await page.goto(url, { 
-            waitUntil: 'domcontentloaded',
-            timeout: 15000 
-        });
+            // Minimize memory usage
+            await page.setJavaScriptEnabled(false);
+            
+            // Navigate with increased timeout
+            await page.goto(url, { 
+                waitUntil: 'domcontentloaded',
+                timeout: 30000 // 30 seconds
+            });
 
-        // Get tweet count using XPath for more precise selection
-        const tweetCount = await page.evaluate(() => {
-            const elements = document.querySelectorAll('.YouTubeUserTopInfo');
-            for (const element of elements) {
-                if (element.textContent.includes('Tweets')) {
-                    const countElement = element.querySelector('span[style="font-weight: bold;"]');
-                    if (countElement) {
-                        return parseInt(countElement.textContent.replace(/,/g, ''));
+            // Add a delay that varies with each retry
+            await new Promise(resolve => setTimeout(resolve, 2000 + (retryCount * 1000)));
+
+            // Get tweet count using XPath for more precise selection
+            const tweetCount = await page.evaluate(() => {
+                const elements = document.querySelectorAll('.YouTubeUserTopInfo');
+                for (const element of elements) {
+                    if (element.textContent.includes('Tweets')) {
+                        const countElement = element.querySelector('span[style="font-weight: bold;"]');
+                        if (countElement) {
+                            return parseInt(countElement.textContent.replace(/,/g, ''));
+                        }
                     }
                 }
-            }
-            return null;
-        });
+                return null;
+            });
 
-        if (!tweetCount) {
-            throw new Error('Failed to find tweet count element');
-        }
-        
-        return tweetCount;
-    } catch (error) {
-        // Only log error details if it's not a normal timeout or navigation error
-        if (!error.message.includes('timeout') && !error.message.includes('net::')) {
-            console.error(`[LOG] [${new Date().toISOString()}] Error getting tweet count for ${username}:`, error);
-        }
-        throw error;
-    } finally {
-        // Ensure page is always closed
-        if (page) {
-            try {
-                await page.close();
-            } catch (closeError) {
-                // Only log if it's not a normal close error
-                if (!closeError.message.includes('Target closed')) {
-                    console.error(`[LOG] [${new Date().toISOString()}] Error closing page:`, closeError);
+            if (!tweetCount) {
+                throw new Error('Failed to find tweet count element');
+            }
+            
+            return tweetCount;
+        } catch (error) {
+            retryCount++;
+            console.log(`[LOG] [${new Date().toISOString()}] Attempt ${retryCount} failed for ${username}:`, error.message);
+            
+            // Close the page before retrying
+            if (page) {
+                try {
+                    await page.close();
+                } catch (closeError) {
+                    // Ignore close errors
+                }
+                page = null;
+            }
+
+            // If we've exhausted all retries, fall back to stored count
+            if (retryCount === maxRetries) {
+                console.log(`[LOG] [${new Date().toISOString()}] All attempts failed for ${username}, falling back to stored count`);
+                const account = config.TWITTER_ACCOUNTS.find(acc => acc.username === username);
+                return account ? account.lastTweetCount : null;
+            }
+
+            // Wait before retrying with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, retryDelay * Math.pow(2, retryCount - 1)));
+        } finally {
+            // Ensure page is always closed
+            if (page) {
+                try {
+                    await page.close();
+                } catch (closeError) {
+                    // Ignore close errors
                 }
             }
         }
