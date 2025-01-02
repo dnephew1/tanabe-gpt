@@ -10,3 +10,4 @@ debug.png
 tanabe-gpt.log
 tanabe_monitor.py
 tanabe-gpt.service
+start.sh
