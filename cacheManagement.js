@@ -35,14 +35,14 @@ async function loadTwitterCookies() {
 
 async function startupCacheClearing() {
     if (!config.ENABLE_STARTUP_CACHE_CLEARING) {
-        console.log(`[LOG] [${new Date().toISOString()}] Startup cache clearing is disabled`);
+        console.log('Startup cache clearing is disabled');
         return;
     }
 
     try {
         await performCacheClearing();
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Failed to clear cache:`, error);
+        console.error('Failed to clear cache:', error);
         await notifyAdmin("Failed to clear cache: " + error.message).catch(console.error);
     }
 }

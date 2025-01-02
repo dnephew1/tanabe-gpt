@@ -58,14 +58,14 @@ setInterval(async () => {
 // Command Handlers
 
 async function handleResumoCommand(message, input) {
-    console.log(`[LOG] [${new Date().toISOString()}] handleResumoCommand activated`);
+    console.log('handleResumoCommand activated');
     const chat = await message.getChat();
     
     const limit = parseInt(input[1]);
 
     if (isNaN(limit)) {
         message.reply('Por favor, forneça um número válido após "#resumo" para definir o limite de mensagens.')
-            .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+            .catch(error => console.error('Failed to send message:', error));
         return;
     }
 
@@ -74,7 +74,7 @@ async function handleResumoCommand(message, input) {
 
     if (messagesWithoutMe.length === 0) {
         message.reply('Não há mensagens suficientes para gerar um resumo')
-            .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+            .catch(error => console.error('Failed to send message:', error));
         return;
     }
 
@@ -93,7 +93,7 @@ async function handleResumoCommand(message, input) {
 
     const result = await runCompletion(prompt, 1);
     message.reply(result.trim())
-        .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+        .catch(error => console.error('Failed to send message:', error));
 }
 
 async function handleStickerMessage(message) {
@@ -194,7 +194,7 @@ async function handleHashTagCommand(message) {
             } catch (error) {
                 console.error(`[LOG] [${new Date().toISOString()}] Error accessing link for context:`, error);
                 message.reply('Não consegui acessar o link para fornecer contexto adicional.')
-                    .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+                    .catch(error => console.error('Failed to send message:', error));
                 return;
             }
         } else {
@@ -212,14 +212,14 @@ async function handleHashTagCommand(message) {
 }
 
 async function handleCommandList(message) {
-    console.log(`[LOG] [${new Date().toISOString()}] handleCommandList activated`);
+    console.log('handleCommandList activated');
     const chat = await message.getChat();
     
     try {
         const sentMessage = await message.reply(config.COMMAND_LIST);
         await deleteMessageAfterTimeout(sentMessage, true);
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Failed to send command list:`, error);
+        console.error('Failed to send command list:', error);
         await notifyAdmin(`Failed to send command list: ${error.message}`);
     }
 }
@@ -246,7 +246,7 @@ async function handleStickerCreation(message) {
                 console.error(`[LOG] [${new Date().toISOString()}] Error processing quoted image:`, error);
                 message.reply('Ocorreu um erro ao processar a imagem citada.')
                     .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
-                    .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send error message:`, error));
+                    .catch(error => console.error('Failed to send error message:', error));
             } finally {
                 // Delete the file after sending or if an error occurred
                 await deleteFile(imagePath);
@@ -254,7 +254,7 @@ async function handleStickerCreation(message) {
         } else {
             message.reply('A mensagem citada não contém uma imagem.')
                 .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
-                .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+                .catch(error => console.error('Failed to send message:', error));
         }
     } else {
         const query = message.body.slice(9).trim();
@@ -270,18 +270,18 @@ async function handleStickerCreation(message) {
                     } else {
                         message.reply('Falha ao baixar a imagem para o sticker.')
                             .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
-                            .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+                            .catch(error => console.error('Failed to send message:', error));
                     }
                 } else {
                     message.reply('Nenhuma imagem encontrada para a consulta fornecida.')
                         .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
-                        .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+                        .catch(error => console.error('Failed to send message:', error));
                 }
             } catch (error) {
                 console.error(`[LOG] [${new Date().toISOString()}] Error:`, error);
                 message.reply('Ocorreu um erro ao processar sua solicitação.')
                     .then(sentMessage => deleteMessageAfterTimeout(sentMessage, true))
-                    .catch(error => console.error(`[LOG] [${new Date().toISOString()}] Failed to send message:`, error));
+                    .catch(error => console.error('Failed to send message:', error));
             }
         } else {
             message.reply('Por favor, forneça uma palavra-chave após #sticker ou cite uma mensagem com uma imagem.')
