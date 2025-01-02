@@ -2,7 +2,7 @@
 const { config, notifyAdmin, runCompletion } = require('./dependencies');
 
 async function runPeriodicSummary() {
-    console.log(`[LOG] [${new Date().toISOString()}] Running periodic summary...`);
+    console.log('Running periodic summary...');
     const chats = await client.getChats();
     for (const chat of chats) {
         if (chat.isGroup && chat.name === config.GROUP2_NAME) {
@@ -35,7 +35,7 @@ async function runPeriodicSummary() {
 
 // handleCorrenteResumoCommand function
 async function handleCorrenteResumoCommand(message, input) {
-    console.log(`[LOG] [${new Date().toISOString()}] handleCorrenteResumoCommand activated`);
+    console.log('handleCorrenteResumoCommand activated');
     const chat = await message.getChat();
 
     const parts = message.body ? message.body.split(' ') : input;

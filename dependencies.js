@@ -362,7 +362,7 @@ async function generateImage(prompt, cfg_scale = 7) {
         });
         return response.data.image;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Error generating image:`, error.response ? error.response.data : error.message);
+        console.error('Error generating image:', error.response ? error.response.data : error.message);
         return null;
     }
 }

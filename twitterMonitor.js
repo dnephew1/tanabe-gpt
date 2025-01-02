@@ -40,7 +40,7 @@ async function checkTwitterUpdates() {
         const group1 = chats.find(chat => chat.name === config.GROUP1_NAME);
         
         if (!group1) {
-            console.log(`[LOG] [${new Date().toISOString()}] Group1 not found`);
+            console.log('Group1 not found');
             return;
         }
 
@@ -66,9 +66,9 @@ async function checkTwitterUpdates() {
                     // Send message to group
                     const message = `@${account.username}:\n${latestTweet.text}`;
                     await group1.sendMessage(message);
-                    console.log(`[LOG] [${new Date().toISOString()}] Sent new tweet to group from ${account.username} - ID: ${latestTweet.id}`);
+                    console.log(`Sent new tweet to group from ${account.username} - ID: ${latestTweet.id}`);
                 } else {
-                    console.log(`[LOG] [${new Date().toISOString()}] Tweet from ${account.username} was not deemed relevant - ID: ${latestTweet.id}`);
+                    console.log(`Tweet from ${account.username} was not deemed relevant - ID: ${latestTweet.id}`);
                 }
                 
                 // Update stored values and config file
@@ -77,7 +77,7 @@ async function checkTwitterUpdates() {
             }
         }
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Error in checkTwitterUpdates:`, error);
+        console.error('Error in checkTwitterUpdates:', error);
         await notifyAdmin(`Error in checkTwitterUpdates: ${error.message}`);
     }
 }
