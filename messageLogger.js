@@ -11,12 +11,12 @@ async function initializeMessageLog() {
             const content = await fs.readFile(LOG_FILE, 'utf8');
             JSON.parse(content);
         } catch {
-            console.log('Creating new message log file...');
+            console.log(`[LOG] [${new Date().toISOString()}] Creating new message log file...`);
             await fs.writeFile(LOG_FILE, '[]');
         }
 
         if (!global.client?.isReady) {
-            console.log('Client not ready, waiting for initialization...');
+            console.log(`[LOG] [${new Date().toISOString()}] Client not ready, waiting for initialization...`);
             return;
         }
         
@@ -53,7 +53,7 @@ async function initializeMessageLog() {
             await fs.writeFile(LOG_FILE, JSON.stringify(formattedMessages, null, 2));
         }
     } catch (error) {
-        console.error('Error initializing message log:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error initializing message log:`, error);
     }
 }
 
@@ -87,7 +87,7 @@ async function logMessage(message) {
 
         await fs.writeFile(LOG_FILE, JSON.stringify(messageLog, null, 2));
     } catch (error) {
-        console.error('Error logging message:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error logging message:`, error);
     }
 }
 
@@ -111,7 +111,7 @@ async function getMessageHistory() {
             
         return validMessages.join('\n');
     } catch (error) {
-        console.error('Error in getMessageHistory:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error in getMessageHistory:`, error);
         return '';
     }
 }

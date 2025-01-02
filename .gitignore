@@ -8,3 +8,5 @@ commands.txt
 group1_messages.json
 debug.png
 tanabe-gpt.log
+tanabe_monitor.py
+tanabe-gpt.service
