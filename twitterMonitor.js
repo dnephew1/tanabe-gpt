@@ -45,9 +45,9 @@ async function checkTwitterUpdates() {
                 // Get current tweet count from SocialBlade
                 const currentTweetCount = await getTweetCount(account.username);
                 
-                // If tweet count increased, fetch the latest tweet
+                // If tweet count increased, fetch the latest tweets
                 if (currentTweetCount > account.lastTweetCount) {
-                    // Use Twitter API to get only the latest tweet
+                    // Use Twitter API to get the latest 5 tweets
                     const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
                     const response = await axios.get(twitterApiUrl, {
                         headers: {
@@ -56,16 +56,31 @@ async function checkTwitterUpdates() {
                     });
 
                     if (response.data && response.data.data && response.data.data.length > 0) {
-                        const latestTweet = response.data.data[0];
+                        const tweets = response.data.data;
+                        const latestTweet = tweets[0];
+                        const olderTweets = tweets.slice(1);
                         
                         // Check if this is actually a new tweet
                         if (latestTweet.id !== account.lastTweetId) {
-                            // Send message to group
-                            const message = `@${account.username}:\n${latestTweet.text}`;
-                            await group1.sendMessage(message);
-                            console.log(`[LOG] [${new Date().toISOString()}] Sent new tweet to group from ${account.username} - ID: ${latestTweet.id}`);
+                            // Prepare the evaluation prompt
+                            const prompt = config.PROMPTS.EVALUATE_NEWS
+                                .replace('{post}', latestTweet.text)
+                                .replace('{previous_posts}', olderTweets.map(t => t.text).join('\n\n'));
+
+                            // Evaluate the news using ChatGPT
+                            const evaluation = await runCompletion(prompt, 1);
                             
-                            // Update stored values and config file
+                            // Only send if the news is deemed relevant
+                            if (evaluation.trim().toLowerCase() === 'relevant') {
+                                // Send message to group
+                                const message = `@${account.username}:\n${latestTweet.text}`;
+                                await group1.sendMessage(message);
+                                console.log(`[LOG] [${new Date().toISOString()}] Sent new tweet to group from ${account.username} - ID: ${latestTweet.id}`);
+                            } else {
+                                console.log(`[LOG] [${new Date().toISOString()}] Tweet from ${account.username} was not deemed relevant - ID: ${latestTweet.id}`);
+                            }
+                            
+                            // Update stored values and config file regardless of relevance
                             account.lastTweetCount = currentTweetCount;
                             account.lastTweetId = latestTweet.id;
                             updateConfigFile(account.username, latestTweet.id, currentTweetCount);
