@@ -105,8 +105,6 @@ async function unshortenLink(link) {
     });
 }
 
-let twitterLoggedIn = false;
-
 async function getPageContent(url) {
     try {
         const unshortenedLink = await unshortenLink(url);
