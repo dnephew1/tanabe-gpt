@@ -53,7 +53,7 @@ async function initializeMessageLog() {
             await fs.writeFile(LOG_FILE, JSON.stringify(formattedMessages, null, 2));
         }
     } catch (error) {
-        console.error('Error initializing message log:', error);
+        console.error('Error initializing message log:', error.message);
     }
 }
 
@@ -87,7 +87,7 @@ async function logMessage(message) {
 
         await fs.writeFile(LOG_FILE, JSON.stringify(messageLog, null, 2));
     } catch (error) {
-        console.error('Error logging message:', error);
+        console.error('Error logging message:', error.message);
     }
 }
 
@@ -111,7 +111,7 @@ async function getMessageHistory() {
             
         return validMessages.join('\n');
     } catch (error) {
-        console.error('Error in getMessageHistory:', error);
+        console.error('Error in getMessageHistory:', error.message);
         return '';
     }
 }

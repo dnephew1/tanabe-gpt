@@ -102,7 +102,7 @@ async function setupListeners(client) {
             }
 
         } catch (error) {
-            console.error(`An error occurred while processing a message:`, error);
+            console.error(`An error occurred while processing a message:`, error.message);
             await notifyAdmin(`Error processing message: ${error.message}`);
         }
     });
@@ -169,7 +169,7 @@ async function handleMessageReaction(reaction) {
             }
         }
     } catch (error) {
-        console.error(`An error occurred in the message_reaction event handler:`, error);
+        console.error(`An error occurred in the message_reaction event handler:`, error.message);
         await notifyAdmin(`Error handling message reaction: ${error.message}`);
     }
 }
@@ -193,12 +193,12 @@ async function handleTags(message, chat) {
                     await handler(message, chat, participants);
                     console.log(`Handled ${tag} tag`);
                 } catch (error) {
-                    console.error(`Error handling ${tag} tag:`, error);
+                    console.error(`Error handling ${tag} tag:`, error.message);
                 }
             }
         }
     } catch (error) {
-        console.error(`Failed to fetch participants:`, error);
+        console.error(`Failed to fetch participants:`, error.message);
     }
 }
 
@@ -256,7 +256,7 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
         mentions: mentionIds,
         quotedMessageId
     }).catch(error => {
-        console.error(`Error sending tag message:`, error);
+        console.error(`Error sending tag message:`, error.message);
     });
 }
 

@@ -42,7 +42,7 @@ async function startupCacheClearing() {
     try {
         await performCacheClearing();
     } catch (error) {
-        console.error('Failed to clear cache:', error);
+        console.error('Failed to clear cache:', error.message);
         await notifyAdmin("Failed to clear cache: " + error.message).catch(console.error);
     }
 }
@@ -64,7 +64,7 @@ async function performCacheClearing() {
                 }
             }
         } catch (error) {
-            console.error(`Error saving Twitter cookies:`, error);
+            console.error(`Error saving Twitter cookies:`, error.message);
         }
     }
 
@@ -84,7 +84,7 @@ async function performCacheClearing() {
                 }
             }
         } catch (error) {
-            console.error(`Error restoring Twitter cookies:`, error);
+            console.error(`Error restoring Twitter cookies:`, error.message);
         }
     }
 }
@@ -97,7 +97,7 @@ async function clearWhatsAppCache() {
         try {
             await fs.rm(cacheDir, { recursive: true, force: true });
         } catch (err) {
-            console.error(`Error clearing WhatsApp Web cache:`, err);
+            console.error(`Error clearing WhatsApp Web cache:`, err.message);
         }
     }
 }
@@ -111,7 +111,7 @@ async function clearPuppeteerCache() {
                 await pages[i].close();
             }
         } catch (error) {
-            console.error(`Error clearing Puppeteer cache:`, error);
+            console.error(`Error clearing Puppeteer cache:`, error.message);
         }
     }
 }

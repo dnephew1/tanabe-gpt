@@ -60,7 +60,7 @@ client.on('ready', async () => {
     try {
         await notifyAdmin("Bot is online and ready!");
     } catch (error) {
-        console.error('Failed to notify admin:', error);
+        console.error('Failed to notify admin:', error.message);
     }
 
     if (cacheManagement) {
@@ -101,12 +101,12 @@ setupListeners(client);
 
 // Error handling for unhandled promises
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    notifyAdmin(`Unhandled Rejection: ${reason}`).catch(console.error);
+    console.error('Unhandled Rejection:', reason?.message || reason);
+    notifyAdmin(`Unhandled Rejection: ${reason?.message || reason}`).catch(console.error);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    console.error('Uncaught Exception:', error.message);
     notifyAdmin(`Uncaught Exception: ${error.message}`).catch(console.error);
     process.exit(1);
 });

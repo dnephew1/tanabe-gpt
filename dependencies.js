@@ -50,7 +50,7 @@ async function notifyAdmin(message) {
         const sent = await global.client.sendMessage(adminContact, message);
         return sent;
     } catch (error) {
-        console.error(`Failed to notify admin:`, error);
+        console.error(`Failed to notify admin:`, error.message);
         throw error;
     }
 }
@@ -68,7 +68,7 @@ async function runCompletion(prompt, group) {
         });
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error(`An error occurred in the runCompletion function:`, error);
+        console.error(`An error occurred in the runCompletion function:`, error.message);
         return '';
     }
 }
@@ -97,7 +97,7 @@ async function unshortenLink(link) {
         });
 
         request.on('error', (error) => {
-            console.error(`Error unshortening URL:`, error);
+            console.error(`Error unshortening URL:`, error.message);
             resolve(link);
         });
 
@@ -153,7 +153,7 @@ async function getPageContent(url) {
                 return content;
 
             } catch (error) {
-                console.error(`Error accessing Twitter content:`, error);
+                console.error(`Error accessing Twitter content:`, error.message);
                 // Take screenshot for debugging
                 try {
                     await page.screenshot({ 
@@ -162,7 +162,7 @@ async function getPageContent(url) {
                     });
                     console.log(`Debug screenshot saved`);
                 } catch (screenshotError) {
-                    console.error(`Failed to take debug screenshot:`, screenshotError);
+                    console.error(`Failed to take debug screenshot:`, screenshotError.message);
                 }
                 await page.close();
                 throw error;
@@ -185,7 +185,7 @@ async function getPageContent(url) {
             return content;
         }
     } catch (error) {
-        console.error(`An error occurred in the getPageContent function:`, error);
+        console.error(`An error occurred in the getPageContent function:`, error.message);
         return null;
     }
 }
@@ -203,7 +203,7 @@ async function searchGoogleForImage(query) {
 
         return imageUrl || null;
     } catch (error) {
-        console.error(`Error while searching for image:`, error);
+        console.error(`Error while searching for image:`, error.message);
         return null;
     }
 }
@@ -228,7 +228,7 @@ async function downloadImage(url) {
         }
         return filePath;
     } catch (error) {
-        console.error(`An error occurred in the downloadImage function:`, error);
+        console.error(`An error occurred while downloading the image:`, error.message);
         return null;
     }
 }
@@ -239,7 +239,7 @@ async function deleteFile(filePath) {
         await fsPromises.unlink(filePath);
         console.log(`File deleted successfully`);
     } catch (error) {
-        console.error(`Error deleting file:`, error);
+        console.error(`Error deleting file:`, error.message);
     }
 }
 
@@ -274,7 +274,7 @@ async function scrapeNews() {
 
         return news;
     } catch (error) {
-        console.error(`An error occurred while scraping news:`, error);
+        console.error(`An error occurred while scraping news:`, error.message);
         return [];
     }
 }
@@ -291,7 +291,7 @@ async function translateToPortuguese(news) {
         const translatedNews = completion.trim().split('\n');
         return translatedNews;
     } catch (error) {
-        console.error(`Translation failed for the news text`, error);
+        console.error(`Translation failed for the news text:`, error.message);
         return news;
     }
 }
@@ -317,7 +317,7 @@ async function scrapeNews2() {
 
         return news;
     } catch (error) {
-        console.error(`An error occurred in the scrapeNews2 function:`, error);
+        console.error(`An error occurred in the scrapeNews2 function:`, error.message);
         return [];
     }
 }
@@ -382,7 +382,7 @@ async function getPageContentWithRetry(url, maxRetries = 3) {
             // Wait between retries with exponential backoff
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
         } catch (error) {
-            console.error(`Attempt ${i + 1} failed:`, error);
+            console.error(`Attempt ${i + 1} failed:`, error.message);
             if (i === maxRetries - 1) throw error;
             
             // Wait before retry
@@ -402,7 +402,7 @@ async function transcribeAudio(audioPath) {
         });
         return transcription.text;
     } catch (error) {
-        console.error(`Error transcribing audio:`, error);
+        console.error(`Error transcribing audio:`, error.message);
         throw error;
     }
 }
