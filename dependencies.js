@@ -34,7 +34,7 @@ async function notifyAdmin(message) {
     const adminContact = `${config.ADMIN_NUMBER}@c.us`;
     try {
         if (!global.client || !global.client.isReady) {
-            console.log(`[LOG] [${new Date().toISOString()}] Client not ready, waiting...`);
+            console.log(`Client not ready, waiting...`);
             await new Promise((resolve, reject) => {
                 if (global.client && global.client.isReady) {
                     resolve();
@@ -50,7 +50,7 @@ async function notifyAdmin(message) {
         const sent = await global.client.sendMessage(adminContact, message);
         return sent;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Failed to notify admin:`, error);
+        console.error(`Failed to notify admin:`, error);
         throw error;
     }
 }
@@ -68,7 +68,7 @@ async function runCompletion(prompt, group) {
         });
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the runCompletion function:`, error);
+        console.error(`An error occurred in the runCompletion function:`, error);
         return '';
     }
 }
@@ -97,7 +97,7 @@ async function unshortenLink(link) {
         });
 
         request.on('error', (error) => {
-            console.error(`[LOG] [${new Date().toISOString()}] Error unshortening URL:`, error);
+            console.error(`Error unshortening URL:`, error);
             resolve(link);
         });
 
@@ -153,16 +153,16 @@ async function getPageContent(url) {
                 return content;
 
             } catch (error) {
-                console.error(`[LOG] [${new Date().toISOString()}] Error accessing Twitter content:`, error);
+                console.error(`Error accessing Twitter content:`, error);
                 // Take screenshot for debugging
                 try {
                     await page.screenshot({ 
                         path: 'debug.png',
                         fullPage: true 
                     });
-                    console.log(`[LOG] [${new Date().toISOString()}] Debug screenshot saved`);
+                    console.log(`Debug screenshot saved`);
                 } catch (screenshotError) {
-                    console.error(`[LOG] [${new Date().toISOString()}] Failed to take debug screenshot:`, screenshotError);
+                    console.error(`Failed to take debug screenshot:`, screenshotError);
                 }
                 await page.close();
                 throw error;
@@ -185,7 +185,7 @@ async function getPageContent(url) {
             return content;
         }
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the getPageContent function:`, error);
+        console.error(`An error occurred in the getPageContent function:`, error);
         return null;
     }
 }
@@ -203,7 +203,7 @@ async function searchGoogleForImage(query) {
 
         return imageUrl || null;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Error while searching for image:`, error);
+        console.error(`Error while searching for image:`, error);
         return null;
     }
 }
@@ -228,7 +228,7 @@ async function downloadImage(url) {
         }
         return filePath;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the downloadImage function:`, error);
+        console.error(`An error occurred in the downloadImage function:`, error);
         return null;
     }
 }
@@ -237,21 +237,21 @@ async function downloadImage(url) {
 async function deleteFile(filePath) {
     try {
         await fsPromises.unlink(filePath);
-        console.log(`[LOG] [${new Date().toISOString()}] File deleted successfully`);
+        console.log(`File deleted successfully`);
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Error deleting file:`, error);
+        console.error(`Error deleting file:`, error);
     }
 }
 
 // Function to scrape news
 async function scrapeNews() {
     try {
-        console.log(`[LOG] [${new Date().toISOString()}] --scrapeNews`);
+        console.log(`--scrapeNews`);
         const url = 'https://www.newsminimalist.com/';
         const response = await axios.get(url);
 
         if (response.status !== 200) {
-            console.error(`[LOG] [${new Date().toISOString()}] Failed to load page`);
+            console.error(`Failed to load page`);
             return [];
         }
 
@@ -259,7 +259,7 @@ async function scrapeNews() {
         const newsElements = $('div.mr-auto');
 
         if (!newsElements.length) {
-            console.log(`[LOG] [${new Date().toISOString()}] No news elements found`);
+            console.log(`No news elements found`);
             return [];
         }
 
@@ -274,14 +274,14 @@ async function scrapeNews() {
 
         return news;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] An error occurred while scraping news:`, error);
+        console.error(`An error occurred while scraping news:`, error);
         return [];
     }
 }
 
 // Function to translate news to Portuguese
 async function translateToPortuguese(news) {
-    console.log(`[LOG] [${new Date().toISOString()}] --translateToPortuguese`);
+    console.log(`--translateToPortuguese`);
     const nonEmptyNews = news.filter(item => item.trim() !== '');
     const newsText = nonEmptyNews.join('\n');
     const prompt = config.PROMPTS.TRANSLATE_NEWS.replace('{newsText}', newsText);
@@ -291,7 +291,7 @@ async function translateToPortuguese(news) {
         const translatedNews = completion.trim().split('\n');
         return translatedNews;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Translation failed for the news text`, error);
+        console.error(`Translation failed for the news text`, error);
         return news;
     }
 }
@@ -299,7 +299,7 @@ async function translateToPortuguese(news) {
 // Function to scrape football news
 async function scrapeNews2() {
     try {
-        console.log(`[LOG] [${new Date().toISOString()}] --scrapeNews2`);
+        console.log(`--scrapeNews2`);
         const url = 'https://ge.globo.com/futebol/';
         const response = await axios.get(url);
         const $ = cheerio.load(response.data);
@@ -317,7 +317,7 @@ async function scrapeNews2() {
 
         return news;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the scrapeNews2 function:`, error);
+        console.error(`An error occurred in the scrapeNews2 function:`, error);
         return [];
     }
 }
@@ -382,7 +382,7 @@ async function getPageContentWithRetry(url, maxRetries = 3) {
             // Wait between retries with exponential backoff
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
         } catch (error) {
-            console.error(`[LOG] [${new Date().toISOString()}] Attempt ${i + 1} failed:`, error);
+            console.error(`Attempt ${i + 1} failed:`, error);
             if (i === maxRetries - 1) throw error;
             
             // Wait before retry
@@ -402,7 +402,7 @@ async function transcribeAudio(audioPath) {
         });
         return transcription.text;
     } catch (error) {
-        console.error(`[LOG] [${new Date().toISOString()}] Error transcribing audio:`, error);
+        console.error(`Error transcribing audio:`, error);
         throw error;
     }
 }
@@ -471,7 +471,7 @@ async function getTweetCount(username) {
             return tweetCount;
         } catch (error) {
             retryCount++;
-            console.log(`[LOG] [${new Date().toISOString()}] Attempt ${retryCount} failed for ${username}:`, error.message);
+            console.log(`Attempt ${retryCount} failed for ${username}:`, error.message);
             
             // Close the page before retrying
             if (page) {
@@ -485,7 +485,7 @@ async function getTweetCount(username) {
 
             // If we've exhausted all retries, fall back to stored count
             if (retryCount === maxRetries) {
-                console.log(`[LOG] [${new Date().toISOString()}] All attempts failed for ${username}, falling back to stored count`);
+                console.log(`All attempts failed for ${username}, falling back to stored count`);
                 const account = config.TWITTER_ACCOUNTS.find(acc => acc.username === username);
                 return account ? account.lastTweetCount : null;
             }
