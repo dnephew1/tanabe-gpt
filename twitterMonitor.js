@@ -25,7 +25,7 @@ async function initializeTwitterMonitor() {
             updateConfigFile(account.username, latestTweet.id);
         }
     } catch (error) {
-        console.error('Error during Twitter monitor initialization:', error);
+        console.error('Error during Twitter monitor initialization:', error.message);
     }
 
     // Start monitoring loop - every 15 minutes
@@ -76,7 +76,7 @@ async function checkTwitterUpdates() {
             }
         }
     } catch (error) {
-        console.error('Error in checkTwitterUpdates:', error);
+        console.error('Error in checkTwitterUpdates:', error.message);
         await notifyAdmin(`Error in checkTwitterUpdates: ${error.message}`);
     }
 }
@@ -98,7 +98,7 @@ function updateConfigFile(username, tweetId) {
         
         fs.writeFileSync(configPath, configContent);
     } catch (error) {
-        console.error('Error updating config file:', error);
+        console.error('Error updating config file:', error.message);
     }
 }
 
