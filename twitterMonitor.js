@@ -36,7 +36,7 @@ async function checkTwitterUpdates() {
         const group1 = chats.find(chat => chat.name === config.GROUP1_NAME);
         
         if (!group1) {
-            console.log('Group1 not found');
+            console.log(`[LOG] [${new Date().toISOString()}] Group1 not found`);
             return;
         }
 
@@ -44,14 +44,11 @@ async function checkTwitterUpdates() {
             try {
                 // Get current tweet count from SocialBlade
                 const currentTweetCount = await getTweetCount(account.username);
-                console.log(`Checking ${account.username} - Current count: ${currentTweetCount}, Stored count: ${account.lastTweetCount}`);
                 
                 // If tweet count increased, fetch the latest tweet
                 if (currentTweetCount > account.lastTweetCount) {
-                    console.log(`New tweets detected for ${account.username} (Count: ${currentTweetCount}, Previous: ${account.lastTweetCount})`);
-                    
                     // Use Twitter API to get only the latest tweet
-                    const twitterApiUrl = `https://api.twitter.com/2/users/by/username/${account.username}/tweets?tweet.fields=text&max_results=1`;
+                    const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
                     const response = await axios.get(twitterApiUrl, {
                         headers: {
                             'Authorization': `Bearer ${config.TWITTER_BEARER_TOKEN}`
@@ -63,32 +60,25 @@ async function checkTwitterUpdates() {
                         
                         // Check if this is actually a new tweet
                         if (latestTweet.id !== account.lastTweetId) {
-                            console.log(`New tweet found for ${account.username} - ID: ${latestTweet.id}`);
-                            
                             // Send message to group
                             const message = `@${account.username}:\n${latestTweet.text}`;
                             await group1.sendMessage(message);
+                            console.log(`[LOG] [${new Date().toISOString()}] Sent new tweet to group from ${account.username} - ID: ${latestTweet.id}`);
                             
                             // Update stored values and config file
                             account.lastTweetCount = currentTweetCount;
                             account.lastTweetId = latestTweet.id;
                             updateConfigFile(account.username, latestTweet.id, currentTweetCount);
-                            
-                            console.log(`Updated stored data for ${account.username}:
-                                Tweet count: ${currentTweetCount}
-                                Tweet ID: ${latestTweet.id}`);
-                        } else {
-                            console.log(`Tweet ${latestTweet.id} already processed for ${account.username}`);
                         }
                     }
                 }
             } catch (error) {
-                console.error(`Error checking Twitter for ${account.username}:`, error);
+                console.error(`[LOG] [${new Date().toISOString()}] Error checking Twitter for ${account.username}:`, error);
                 await notifyAdmin(`Error checking Twitter for ${account.username}: ${error.message}`);
             }
         }
     } catch (error) {
-        console.error('Error in checkTwitterUpdates:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error in checkTwitterUpdates:`, error);
         await notifyAdmin(`Error in checkTwitterUpdates: ${error.message}`);
     }
 }

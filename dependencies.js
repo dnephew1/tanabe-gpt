@@ -34,7 +34,7 @@ async function notifyAdmin(message) {
     const adminContact = `${config.ADMIN_NUMBER}@c.us`;
     try {
         if (!global.client || !global.client.isReady) {
-            console.log('Client not ready, waiting...');
+            console.log(`[LOG] [${new Date().toISOString()}] Client not ready, waiting...`);
             await new Promise((resolve, reject) => {
                 if (global.client && global.client.isReady) {
                     resolve();
@@ -50,7 +50,7 @@ async function notifyAdmin(message) {
         const sent = await global.client.sendMessage(adminContact, message);
         return sent;
     } catch (error) {
-        console.error('Failed to notify admin:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Failed to notify admin:`, error);
         throw error;
     }
 }
@@ -68,7 +68,7 @@ async function runCompletion(prompt, group) {
         });
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error('An error occurred in the runCompletion function:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the runCompletion function:`, error);
         return '';
     }
 }
@@ -97,7 +97,7 @@ async function unshortenLink(link) {
         });
 
         request.on('error', (error) => {
-            console.error('Error unshortening URL:', error);
+            console.error(`[LOG] [${new Date().toISOString()}] Error unshortening URL:`, error);
             resolve(link);
         });
 
@@ -155,16 +155,16 @@ async function getPageContent(url) {
                 return content;
 
             } catch (error) {
-                console.error('Error accessing Twitter content:', error);
+                console.error(`[LOG] [${new Date().toISOString()}] Error accessing Twitter content:`, error);
                 // Take screenshot for debugging
                 try {
                     await page.screenshot({ 
                         path: 'debug.png',
                         fullPage: true 
                     });
-                    console.log('Debug screenshot saved');
+                    console.log(`[LOG] [${new Date().toISOString()}] Debug screenshot saved`);
                 } catch (screenshotError) {
-                    console.error('Failed to take debug screenshot:', screenshotError);
+                    console.error(`[LOG] [${new Date().toISOString()}] Failed to take debug screenshot:`, screenshotError);
                 }
                 await page.close();
                 throw error;
@@ -187,7 +187,7 @@ async function getPageContent(url) {
             return content;
         }
     } catch (error) {
-        console.error('An error occurred in the getPageContent function:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the getPageContent function:`, error);
         return null;
     }
 }
@@ -205,7 +205,7 @@ async function searchGoogleForImage(query) {
 
         return imageUrl || null;
     } catch (error) {
-        console.error('Error while searching for image:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error while searching for image:`, error);
         return null;
     }
 }
@@ -230,7 +230,7 @@ async function downloadImage(url) {
         }
         return filePath;
     } catch (error) {
-        console.error('An error occurred in the downloadImage function:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the downloadImage function:`, error);
         return null;
     }
 }
@@ -239,21 +239,21 @@ async function downloadImage(url) {
 async function deleteFile(filePath) {
     try {
         await fsPromises.unlink(filePath);
-        console.log('File deleted successfully');
+        console.log(`[LOG] [${new Date().toISOString()}] File deleted successfully`);
     } catch (error) {
-        console.error('Error deleting file:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error deleting file:`, error);
     }
 }
 
 // Function to scrape news
 async function scrapeNews() {
     try {
-        console.log('--scrapeNews')
+        console.log(`[LOG] [${new Date().toISOString()}] --scrapeNews`);
         const url = 'https://www.newsminimalist.com/';
         const response = await axios.get(url);
 
         if (response.status !== 200) {
-            console.error('Failed to load page');
+            console.error(`[LOG] [${new Date().toISOString()}] Failed to load page`);
             return [];
         }
 
@@ -261,7 +261,7 @@ async function scrapeNews() {
         const newsElements = $('div.mr-auto');
 
         if (!newsElements.length) {
-            console.log('No news elements found');
+            console.log(`[LOG] [${new Date().toISOString()}] No news elements found`);
             return [];
         }
 
@@ -276,14 +276,14 @@ async function scrapeNews() {
 
         return news;
     } catch (error) {
-        console.error('An error occurred while scraping news:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred while scraping news:`, error);
         return [];
     }
 }
 
 // Function to translate news to Portuguese
 async function translateToPortuguese(news) {
-    console.log('--translateToPortuguese')
+    console.log(`[LOG] [${new Date().toISOString()}] --translateToPortuguese`);
     const nonEmptyNews = news.filter(item => item.trim() !== '');
     const newsText = nonEmptyNews.join('\n');
     const prompt = config.PROMPTS.TRANSLATE_NEWS.replace('{newsText}', newsText);
@@ -293,7 +293,7 @@ async function translateToPortuguese(news) {
         const translatedNews = completion.trim().split('\n');
         return translatedNews;
     } catch (error) {
-        console.error('Translation failed for the news text', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Translation failed for the news text`, error);
         return news;
     }
 }
@@ -301,7 +301,7 @@ async function translateToPortuguese(news) {
 // Function to scrape football news
 async function scrapeNews2() {
     try {
-        console.log('--scrapeNews2')
+        console.log(`[LOG] [${new Date().toISOString()}] --scrapeNews2`);
         const url = 'https://ge.globo.com/futebol/';
         const response = await axios.get(url);
         const $ = cheerio.load(response.data);
@@ -319,7 +319,7 @@ async function scrapeNews2() {
 
         return news;
     } catch (error) {
-        console.error('An error occurred in the scrapeNews2 function:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the scrapeNews2 function:`, error);
         return [];
     }
 }
@@ -364,7 +364,7 @@ async function generateImage(prompt, cfg_scale = 7) {
         });
         return response.data.image;
     } catch (error) {
-        console.error('Error generating image:', error.response ? error.response.data : error.message);
+        console.error(`[LOG] [${new Date().toISOString()}] Error generating image:`, error.response ? error.response.data : error.message);
         return null;
     }
 }
@@ -384,7 +384,7 @@ async function getPageContentWithRetry(url, maxRetries = 3) {
             // Wait between retries with exponential backoff
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
         } catch (error) {
-            console.error(`Attempt ${i + 1} failed:`, error);
+            console.error(`[LOG] [${new Date().toISOString()}] Attempt ${i + 1} failed:`, error);
             if (i === maxRetries - 1) throw error;
             
             // Wait before retry
@@ -404,7 +404,7 @@ async function transcribeAudio(audioPath) {
         });
         return transcription.text;
     } catch (error) {
-        console.error('Error transcribing audio:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error transcribing audio:`, error);
         throw error;
     }
 }
@@ -461,7 +461,10 @@ async function getTweetCount(username) {
         
         return tweetCount;
     } catch (error) {
-        console.error(`Error getting tweet count for ${username}:`, error);
+        // Only log error details if it's not a normal timeout or navigation error
+        if (!error.message.includes('timeout') && !error.message.includes('net::')) {
+            console.error(`[LOG] [${new Date().toISOString()}] Error getting tweet count for ${username}:`, error);
+        }
         throw error;
     } finally {
         // Ensure page is always closed
@@ -469,7 +472,10 @@ async function getTweetCount(username) {
             try {
                 await page.close();
             } catch (closeError) {
-                console.error('Error closing page:', closeError);
+                // Only log if it's not a normal close error
+                if (!closeError.message.includes('Target closed')) {
+                    console.error(`[LOG] [${new Date().toISOString()}] Error closing page:`, closeError);
+                }
             }
         }
     }

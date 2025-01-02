@@ -35,14 +35,14 @@ async function loadTwitterCookies() {
 
 async function startupCacheClearing() {
     if (!config.ENABLE_STARTUP_CACHE_CLEARING) {
-        console.log('Startup cache clearing is disabled');
+        console.log(`[LOG] [${new Date().toISOString()}] Startup cache clearing is disabled`);
         return;
     }
 
     try {
         await performCacheClearing();
     } catch (error) {
-        console.error("Failed to clear cache:", error);
+        console.error(`[LOG] [${new Date().toISOString()}] Failed to clear cache:`, error);
         await notifyAdmin("Failed to clear cache: " + error.message).catch(console.error);
     }
 }
@@ -64,13 +64,13 @@ async function performCacheClearing() {
                 }
             }
         } catch (error) {
-            console.error('Error saving Twitter cookies:', error);
+            console.error(`[LOG] [${new Date().toISOString()}] Error saving Twitter cookies:`, error);
         }
     }
 
     await clearWhatsAppCache();
     await clearPuppeteerCache();
-    console.log('Cache clearing process completed');
+    console.log(`[LOG] [${new Date().toISOString()}] Cache clearing process completed`);
 
     // Restore Twitter cookies after clearing cache
     if (global.client && global.client.pupBrowser) {
@@ -80,11 +80,11 @@ async function performCacheClearing() {
                 const page = (await global.client.pupBrowser.pages())[0];
                 if (page) {
                     await page.setCookie(...cookies);
-                    console.log('Twitter cookies restored successfully');
+                    console.log(`[LOG] [${new Date().toISOString()}] Twitter cookies restored successfully`);
                 }
             }
         } catch (error) {
-            console.error('Error restoring Twitter cookies:', error);
+            console.error(`[LOG] [${new Date().toISOString()}] Error restoring Twitter cookies:`, error);
         }
     }
 }
@@ -97,7 +97,7 @@ async function clearWhatsAppCache() {
         try {
             await fs.rm(cacheDir, { recursive: true, force: true });
         } catch (err) {
-            console.error('Error clearing WhatsApp Web cache:', err);
+            console.error(`[LOG] [${new Date().toISOString()}] Error clearing WhatsApp Web cache:`, err);
         }
     }
 }
@@ -111,7 +111,7 @@ async function clearPuppeteerCache() {
                 await pages[i].close();
             }
         } catch (error) {
-            console.error('Error clearing Puppeteer cache:', error);
+            console.error(`[LOG] [${new Date().toISOString()}] Error clearing Puppeteer cache:`, error);
         }
     }
 }

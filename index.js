@@ -44,7 +44,7 @@ client.on('qr', qr => {
 
 // Client ready event handler
 client.on('ready', async () => {
-    console.log('Client is ready!');
+    console.log(`[LOG] [${new Date().toISOString()}] Client is ready!`);
     global.client.isReady = true;
     global.client.pupBrowser = client.pupPage.browser();
     await initializeMessageLog();
@@ -52,7 +52,7 @@ client.on('ready', async () => {
     try {
         await notifyAdmin("Bot is online and ready!");
     } catch (error) {
-        console.error("Failed to notify admin:", error);
+        console.error(`[LOG] [${new Date().toISOString()}] Failed to notify admin:`, error);
     }
 
     if (cacheManagement) {
@@ -62,7 +62,7 @@ client.on('ready', async () => {
     }
     scheduleNextSummary(); // Schedule the periodic summary
 
-    console.log("Bot initialization completed");
+    console.log(`[LOG] [${new Date().toISOString()}] Bot initialization completed`);
 
     await initializeTwitterMonitor();
 });
@@ -72,18 +72,18 @@ let reconnectAttempts = 0;
 
 function reconnectClient() {
     if (reconnectAttempts < config.MAX_RECONNECT_ATTEMPTS) {
-        console.log('Attempting to reconnect...');
+        console.log(`[LOG] [${new Date().toISOString()}] Attempting to reconnect...`);
         client.initialize();
         reconnectAttempts++;
     } else {
-        console.log(`Failed to reconnect after ${config.MAX_RECONNECT_ATTEMPTS} attempts. Exiting...`);
+        console.log(`[LOG] [${new Date().toISOString()}] Failed to reconnect after ${config.MAX_RECONNECT_ATTEMPTS} attempts. Exiting...`);
         notifyAdmin("Bot failed to reconnect and is shutting down.").catch(console.error);
         process.exit(1);
     }
 }
 
 client.on('disconnected', (reason) => {
-    console.log('Client disconnected:', reason);
+    console.log(`[LOG] [${new Date().toISOString()}] Client disconnected:`, reason);
     notifyAdmin(`Bot disconnected: ${reason}`).catch(console.error);
     reconnectClient();
 });
@@ -93,12 +93,12 @@ setupListeners(client);
 
 // Error handling for unhandled promises
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error(`[LOG] [${new Date().toISOString()}] Unhandled Rejection at:`, promise, 'reason:', reason);
     notifyAdmin(`Unhandled Rejection: ${reason}`).catch(console.error);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    console.error(`[LOG] [${new Date().toISOString()}] Uncaught Exception:`, error);
     notifyAdmin(`Uncaught Exception: ${error.message}`).catch(console.error);
     process.exit(1);
 });
@@ -126,7 +126,7 @@ function scheduleNextSummary() {
     setTimeout(() => {
         runPeriodicSummary().finally(scheduleNextSummary);
     }, delay);
-    console.log(`Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
+    console.log(`[LOG] [${new Date().toISOString()}] Next summary scheduled for ${nextRunTime.getHours()}:00 (Brasilia Time)`);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 

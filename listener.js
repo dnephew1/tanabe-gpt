@@ -71,7 +71,7 @@ async function setupListeners(client) {
             if (messageBody.startsWith('#') || messageBody === '!clearcache') {
                 // Only show typing for valid commands
                 await chat.sendStateTyping();
-                console.log(`Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
+                console.log(`[LOG] [${new Date().toISOString()}] Received message from ${contactName} in ${chat.name || 'private chat'}: ${messageBody}`);
 
                 // Handle commands based on context
                 if (isGroup1 || isGroup1Participant || isAdminChat) {
@@ -102,7 +102,7 @@ async function setupListeners(client) {
             }
 
         } catch (error) {
-            console.error('An error occurred while processing a message:', error);
+            console.error(`[LOG] [${new Date().toISOString()}] An error occurred while processing a message:`, error);
             await notifyAdmin(`Error processing message: ${error.message}`);
         }
     });
@@ -155,7 +155,7 @@ async function handleGroup1Commands(message, inputLower, input, contactName, isG
 }
 
 async function handleMessageReaction(reaction) {
-    console.log('Reaction detected');
+    console.log(`[LOG] [${new Date().toISOString()}] Reaction detected`);
     try {
         const reactedMsgId = reaction.msgId;
         const chat = await global.client.getChatById(reaction.msgId.remote);
@@ -164,12 +164,12 @@ async function handleMessageReaction(reaction) {
         for (let message of messages) {
             if (message.id._serialized === reactedMsgId._serialized) {
                 await message.delete(true);
-                console.log('Deleted message:', message.body);
+                console.log(`[LOG] [${new Date().toISOString()}] Deleted message:`, message.body);
                 break;
             }
         }
     } catch (error) {
-        console.error('An error occurred in the message_reaction event handler:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] An error occurred in the message_reaction event handler:`, error);
         await notifyAdmin(`Error handling message reaction: ${error.message}`);
     }
 }
@@ -191,14 +191,14 @@ async function handleTags(message, chat) {
             if (messageText.includes(tag.toLowerCase())) {
                 try {
                     await handler(message, chat, participants);
-                    console.log(`Handled ${tag} tag`);
+                    console.log(`[LOG] [${new Date().toISOString()}] Handled ${tag} tag`);
                 } catch (error) {
-                    console.error(`Error handling ${tag} tag:`, error);
+                    console.error(`[LOG] [${new Date().toISOString()}] Error handling ${tag} tag:`, error);
                 }
             }
         }
     } catch (error) {
-        console.error('Failed to fetch participants:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Failed to fetch participants:`, error);
     }
 }
 
@@ -242,7 +242,7 @@ async function handleCartolaTag(message, chat, participants) {
 // Function to send tag message
 function sendTagMessage(chat, mentions, quotedMessageId) {
     if (!mentions || mentions.length === 0) {
-        console.log('No mentions to send');
+        console.log(`[LOG] [${new Date().toISOString()}] No mentions to send`);
         return;
     }
 
@@ -250,13 +250,13 @@ function sendTagMessage(chat, mentions, quotedMessageId) {
     const mentionIds = mentions.map(contact => contact.id._serialized);
 
     let text = mentionIds.map(id => `@${id.split('@')[0]}`).join(' ');
-    console.log(`Sending tag message with ${mentionIds.length} mentions`);
+    console.log(`[LOG] [${new Date().toISOString()}] Sending tag message with ${mentionIds.length} mentions`);
 
     return chat.sendMessage(text, {
         mentions: mentionIds,
         quotedMessageId
     }).catch(error => {
-        console.error('Error sending tag message:', error);
+        console.error(`[LOG] [${new Date().toISOString()}] Error sending tag message:`, error);
     });
 }
 
