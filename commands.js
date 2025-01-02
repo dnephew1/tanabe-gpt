@@ -555,17 +555,28 @@ async function handleTwitterDebug(message) {
                     }
                 });
                 
-                let tweetText = 'No tweets found';
+                let tweetInfo = 'No tweets found';
                 if (response.data && response.data.data && response.data.data.length > 0) {
-                    // Get the most recent tweet (first in the array)
-                    tweetText = response.data.data[0].text;
+                    const tweets = response.data.data;
+                    const latestTweet = tweets[0];
+                    const olderTweets = tweets.slice(1);
+
+                    // Prepare the evaluation prompt
+                    const prompt = config.PROMPTS.EVALUATE_NEWS
+                        .replace('{post}', latestTweet.text)
+                        .replace('{previous_posts}', olderTweets.map(t => t.text).join('\n\n'));
+
+                    // Evaluate the news using ChatGPT
+                    const evaluation = await runCompletion(prompt, 1);
+                    
+                    tweetInfo = `Latest Tweet Text: ${latestTweet.text}\nEvaluation Result: ${evaluation.trim()}`;
                 }
                 
                 results.push(`@${account.username}:
                 Last Tweet ID: ${account.lastTweetId}
                 Stored Tweet Count: ${account.lastTweetCount}
                 Current Tweet Count: ${currentTweetCount}
-                Latest Tweet Text: ${tweetText}`);
+                ${tweetInfo}`);
 
                 // Add delay between accounts to avoid rate limits
                 if (config.TWITTER_ACCOUNTS.length > 1) {
