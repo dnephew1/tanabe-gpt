@@ -23,7 +23,6 @@ async function initializeTwitterMonitor() {
             const latestTweet = data.data[0];
             account.lastTweetId = latestTweet.id;
             updateConfigFile(account.username, latestTweet.id);
-            console.log(`Initialized last tweet ID for ${account.username}: ${latestTweet.id}`);
         }
     } catch (error) {
         console.error('Error during Twitter monitor initialization:', error);
