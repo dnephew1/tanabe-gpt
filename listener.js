@@ -1,6 +1,7 @@
 // listener.js
 
-const { config, extractLinks, notifyAdmin, crypto } = require('./dependencies');
+const { config, extractLinks, crypto } = require('./dependencies');
+const logger = require('./logger');
 const { processCommand } = require('./commandHandler');
 const { initializeMessageLog, logMessage } = require('./messageLogger');
 

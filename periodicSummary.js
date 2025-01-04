@@ -1,5 +1,6 @@
 //Integrated into index.js, listener.js, runCompletion in dependencies.js
-const { config, notifyAdmin, runCompletion } = require('./dependencies');
+const { config, runCompletion } = require('./dependencies');
+const logger = require('./logger');
 
 // Helper function to get group config with defaults
 function getGroupConfig(groupName, groupConfig) {

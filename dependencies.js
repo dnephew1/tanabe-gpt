@@ -1,5 +1,4 @@
 // dependencies.js
-    // notifyAdmin,
     // runCompletion,
     // extractLinks,
     // unshortenLink,
@@ -28,37 +27,6 @@ const config = require('./config');
 const openai = new OpenAI({
     apiKey: config.CREDENTIALS.OPENAI_API_KEY
 });
-
-// Function to notify admin
-async function notifyAdmin(message) {
-    try {
-        if (!global.client || !global.client.isReady) {
-            console.log(`Client not ready, waiting...`);
-            await new Promise((resolve, reject) => {
-                if (global.client && global.client.isReady) {
-                    resolve();
-                } else if (global.client) {
-                    global.client.once('ready', resolve);
-                    setTimeout(() => reject(new Error('Timeout waiting for client to be ready')), 30000);
-                } else {
-                    reject(new Error('Global client does not exist'));
-                }
-            });
-        }
-
-        const adminContact = `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
-        
-        try {
-            await global.client.sendMessage(adminContact, message);
-        } catch (error) {
-            console.error('Error sending message to admin:', error.message);
-            return null;
-        }
-    } catch (error) {
-        console.error(`Failed to notify admin:`, error.message);
-        return null;
-    }
-}
 
 // Function to run ChatGPT completion
 const runCompletion = async (prompt, temperature = 1, model = null) => {
@@ -594,7 +562,6 @@ module.exports = {
     https,
     config,
     openai,
-    notifyAdmin,
     runCompletion,
     extractLinks,
     unshortenLink,

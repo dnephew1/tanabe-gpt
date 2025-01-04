@@ -73,7 +73,7 @@ async function processCommand(message) {
                 const status = groupConfig.enabled !== false ? '✅' : '❌';
                 welcomeMessage += `${index + 1}. ${status} ${group}\n`;
             });
-            welcomeMessage += '\nSelecione um número para editar um grupo existente ou digite um novo nome de grupo para criar:';
+            welcomeMessage += '\nSelecione um número para editar um grupo existente ou digite um novo nome de grupo para criar. Escreva "cancelar" para cancelar a sessão.';
         } else {
             welcomeMessage += 'Nenhum grupo configurado. Digite o nome *exato* do grupo que você deseja configurar:';
         }
@@ -802,10 +802,47 @@ async function handleWizardResponse(message, session) {
     return session;
 }
 
+async function handleChatGPT(message) {
+    try {
+        const chat = await message.getChat();
+        const messageHistory = await getMessageHistory(chat.name);
+        
+        // Get the question from the message
+        const question = message.body.slice(message.body.startsWith('#!') ? 2 : 1).trim();
+        
+        if (!question) {
+            await message.reply(config.COMMANDS.CHAT_GPT.errorMessages.invalidFormat);
+            return;
+        }
+
+        const contact = await message.getContact();
+        const name = contact.name || contact.pushname || contact.number;
+
+        // Get the appropriate prompt template
+        const promptTemplate = getPrompt('CHAT_GPT', 'DEFAULT', chat.name);
+        
+        // Replace placeholders in the prompt
+        const prompt = promptTemplate
+            .replace('{name}', name)
+            .replace('{question}', question)
+            .replace('{maxMessages}', config.SYSTEM.MAX_LOG_MESSAGES)
+            .replace('{messageHistory}', messageHistory);
+
+        // Get response from ChatGPT
+        const response = await runCompletion(prompt);
+        await message.reply(response);
+
+    } catch (error) {
+        logger.error('Error in handleChatGPT:', error);
+        await message.reply('Desculpe, ocorreu um erro ao processar sua pergunta.');
+    }
+}
+
 // Export the functions
 module.exports = {
     processCommand,
     getPromptWithContext,
     handleAutoDelete,
     getCommandListContent,
+    handleChatGPT,
 }; 

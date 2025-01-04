@@ -10,7 +10,7 @@ process.on('warning', (warning) => {
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { config, notifyAdmin } = require('./dependencies');
+const { config } = require('./dependencies');
 const { setupListeners } = require('./listener');
 const { runPeriodicSummary } = require('./periodicSummary');
 const { initializeMessageLog } = require('./messageLogger');
@@ -46,6 +46,25 @@ const client = new Client({
 
 // Assign the client to global.client after creation
 global.client = client;
+
+// Helper function to check if a time is between two times
+function isTimeBetween(time, start, end) {
+    // Convert times to comparable format (minutes since midnight)
+    const getMinutes = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+
+    const timeMinutes = getMinutes(time);
+    const startMinutes = getMinutes(start);
+    const endMinutes = getMinutes(end);
+
+    // Handle cases where quiet time spans across midnight
+    if (startMinutes > endMinutes) {
+        return timeMinutes >= startMinutes || timeMinutes <= endMinutes;
+    }
+    return timeMinutes >= startMinutes && timeMinutes <= endMinutes;
+}
 
 // Helper function to check if it's quiet time for any enabled group
 function isQuietTimeForAnyGroup() {
@@ -96,32 +115,41 @@ function scheduleNextSummary() {
             return;
         }
 
-        const interval = getShortestInterval();
-        if (!interval) {
+        const nextSummaryInfo = getNextSummaryInfo();
+        if (!nextSummaryInfo) {
             logger.info('No groups configured for periodic summaries');
             return;
         }
 
-        // Convert interval to milliseconds
+        const { group, interval, nextValidTime } = nextSummaryInfo;
         const intervalMs = interval * 60 * 60 * 1000;
 
         // Schedule next run
         setTimeout(() => {
-            // Only run if it's not quiet time
-            if (!isQuietTimeForAnyGroup()) {
-                runPeriodicSummary().catch(error => {
-                    logger.error('Failed to run periodic summary', error);
-                });
-            } else {
-                logger.info('Skipping summary - currently in quiet time');
-            }
+            runPeriodicSummary().then(summaryResult => {
+                const { success, reason, nextGroup, nextTime } = summaryResult;
+                const statusMessage = success 
+                    ? `Summary sent for ${group}`
+                    : `Summary not sent for ${group}: ${reason}`;
+                
+                const nextSummaryMessage = `Next summary: ${nextGroup} at ${nextTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
+                
+                // Log summary status and next summary info
+                logger.summary(`${statusMessage}. ${nextSummaryMessage}`);
+            }).catch(error => {
+                logger.error('Failed to run periodic summary', error);
+            });
+            
             // Schedule next run regardless
             scheduleNextSummary();
         }, intervalMs);
 
-        // Log next run time
-        const nextRunTime = new Date(Date.now() + intervalMs);
-        logger.info(`Next summary scheduled for ${nextRunTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`);
+        // Log next run time with group info
+        const summaryTimeMessage = isQuietTimeForGroup(group, nextValidTime)
+            ? `Summary for ${group} scheduled for ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT) - Note: This is during quiet hours`
+            : `Next summary: ${group} at ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
+            
+        logger.summary(summaryTimeMessage);
     } catch (error) {
         logger.error('Error scheduling next summary', error);
         // Try to reschedule in 5 minutes if there's an error
@@ -129,11 +157,56 @@ function scheduleNextSummary() {
     }
 }
 
+function getNextSummaryInfo() {
+    const groups = Object.entries(config.PERIODIC_SUMMARY.groups)
+        .filter(([_, config]) => config.enabled);
+    
+    if (groups.length === 0) return null;
+
+    let nextSummaryTime = Infinity;
+    let selectedGroup = null;
+    let selectedInterval = null;
+
+    for (const [group, groupConfig] of groups) {
+        const interval = groupConfig.intervalHours || config.PERIODIC_SUMMARY.defaults.intervalHours;
+        const now = new Date();
+        let nextTime = new Date(now.getTime() + interval * 60 * 60 * 1000);
+        
+        // If it's during quiet hours, find the next valid time
+        while (isQuietTimeForGroup(group, nextTime)) {
+            nextTime = new Date(nextTime.getTime() + interval * 60 * 60 * 1000);
+        }
+
+        if (nextTime.getTime() < nextSummaryTime) {
+            nextSummaryTime = nextTime.getTime();
+            selectedGroup = group;
+            selectedInterval = interval;
+        }
+    }
+
+    return selectedGroup ? {
+        group: selectedGroup,
+        interval: selectedInterval,
+        nextValidTime: new Date(nextSummaryTime)
+    } : null;
+}
+
+function isQuietTimeForGroup(groupName, time) {
+    const groupConfig = config.PERIODIC_SUMMARY.groups[groupName];
+    const quietTime = groupConfig?.quietTime || config.PERIODIC_SUMMARY.defaults.quietTime;
+    
+    const timeStr = time.toLocaleTimeString('pt-BR', { 
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    return isTimeBetween(timeStr, quietTime.start, quietTime.end);
+}
+
 // Initialize bot components
 async function initializeBot() {
     try {
-        logger.startup('Bot starting...');
-
         // Set up event listeners before initialization
         client.on('qr', qr => {
             logger.info('Scan QR code to authenticate');
@@ -158,8 +231,17 @@ async function initializeBot() {
                 isInitialized = true;
 
                 try {
+                    // Process any pending admin notifications
+                    if (global.pendingAdminNotifications?.length > 0) {
+                        logger.info('Processing pending admin notifications...');
+                        for (const message of global.pendingAdminNotifications) {
+                            await logger.notifyAdmin(message);
+                        }
+                        global.pendingAdminNotifications = [];
+                    }
+
                     // Initialize components only after client is ready
-                    await initializeMessageLog();
+                    await initializeMessageLog(client);
                     
                     if (config.PERIODIC_SUMMARY?.enabled) {
                         scheduleNextSummary();

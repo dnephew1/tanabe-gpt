@@ -5,6 +5,33 @@ const path = require('path');
 let previousTweets = new Set();
 const TWEET_CACHE_FILE = path.join(__dirname, 'tweetCache.json');
 
+async function checkTwitterAPIUsage() {
+    try {
+        const url = 'https://api.twitter.com/2/usage/tweets';
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Bearer ${config.CREDENTIALS.TWITTER_BEARER_TOKEN}`
+            },
+            params: {
+                'usage.fields': 'cap_reset_day,project_usage'
+            }
+        });
+        
+        if (response.data && response.data.data) {
+            const usage = response.data.data;
+            return {
+                remaining: usage.cap ? usage.cap - usage.usage : 'unknown',
+                total: usage.cap || 'unknown',
+                resetDay: usage.cap_reset_day || 'unknown'
+            };
+        }
+        throw new Error('Invalid response format from Twitter API');
+    } catch (error) {
+        console.error('[ERROR] Error checking Twitter API usage:', error.message);
+        throw error;
+    }
+}
+
 async function loadTweetCache() {
     try {
         const data = await fs.readFile(TWEET_CACHE_FILE, 'utf8');
@@ -48,48 +75,58 @@ async function initializeTwitterMonitor() {
             return;
         }
 
+        // Check API usage before starting
+        try {
+            const usage = await checkTwitterAPIUsage();
+            console.log(`Twitter monitor initialized successfully (API Usage: ${usage.remaining}/${usage.total} requests remaining, resets on day ${usage.resetDay} of the month)`);
+        } catch (error) {
+            console.log('[INFO] Twitter monitor initialized with unknown API usage status');
+        }
+
         // Load cached tweet IDs
         const lastTweetIds = await loadTweetCache();
         
-        // Set up monitoring interval
-        setInterval(async () => {
-            try {
-                for (const account of config.TWITTER.ACCOUNTS) {
-                    const tweets = await fetchLatestTweets(account.userId, lastTweetIds[account.userId]);
-                    
-                    for (const tweet of tweets.reverse()) {
-                        // Skip if we've seen this tweet
-                        if (previousTweets.has(tweet.text)) continue;
-
-                        // Evaluate if tweet should be shared
-                        const isRelevant = await evaluateTweet(tweet.text, previousTweets);
+        // Wait 15 minutes before first tweet pull
+        setTimeout(async () => {
+            // Set up monitoring interval
+            const monitorInterval = setInterval(async () => {
+                try {
+                    for (const account of config.TWITTER.ACCOUNTS) {
+                        const tweets = await fetchLatestTweets(account.userId, lastTweetIds[account.userId]);
                         
-                        if (isRelevant) {
-                            const message = `*Breaking News* 🗞️\n\n${tweet.text}\n\nSource: @${account.username}`;
-                            await targetGroup.sendMessage(message);
-                            console.log(`Sent tweet from ${account.username}: ${tweet.text.substring(0, 50)}...`);
+                        for (const tweet of tweets.reverse()) {
+                            // Skip if we've seen this tweet
+                            if (previousTweets.has(tweet.text)) continue;
+
+                            // Evaluate if tweet should be shared
+                            const isRelevant = await evaluateTweet(tweet.text, previousTweets);
+                            
+                            if (isRelevant) {
+                                const message = `*Breaking News* 🗞️\n\n${tweet.text}\n\nSource: @${account.username}`;
+                                await targetGroup.sendMessage(message);
+                                console.log(`Sent tweet from ${account.username}: ${tweet.text.substring(0, 50)}...`);
+                            }
+
+                            // Update tracking
+                            previousTweets.add(tweet.text);
+                            lastTweetIds[account.userId] = tweet.id;
                         }
-
-                        // Update tracking
-                        previousTweets.add(tweet.text);
-                        lastTweetIds[account.userId] = tweet.id;
                     }
+
+                    // Save updated cache
+                    await saveTweetCache(lastTweetIds);
+
+                    // Keep cache size manageable
+                    if (previousTweets.size > 100) {
+                        previousTweets = new Set(Array.from(previousTweets).slice(-50));
+                    }
+
+                } catch (error) {
+                    console.error('[ERROR] Error in Twitter monitor interval:', error.message);
                 }
-
-                // Save updated cache
-                await saveTweetCache(lastTweetIds);
-
-                // Keep cache size manageable
-                if (previousTweets.size > 100) {
-                    previousTweets = new Set(Array.from(previousTweets).slice(-50));
-                }
-
-            } catch (error) {
-                console.error('[ERROR] Error in Twitter monitor interval:', error.message);
-            }
+            }, config.TWITTER.CHECK_INTERVAL);
         }, config.TWITTER.CHECK_INTERVAL);
 
-        console.log('Twitter monitor initialized successfully');
     } catch (error) {
         console.error('[ERROR] Error during Twitter monitor initialization:', error.message);
     }
