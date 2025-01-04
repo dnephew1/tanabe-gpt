@@ -26,12 +26,11 @@ const config = require('./config');
 
 // Initialize OpenAI
 const openai = new OpenAI({
-    apiKey: config.OPENAI_API_KEY
+    apiKey: config.CREDENTIALS.OPENAI_API_KEY
 });
 
 // Function to notify admin
 async function notifyAdmin(message) {
-    const adminContact = `${config.ADMIN_NUMBER}@c.us`;
     try {
         if (!global.client || !global.client.isReady) {
             console.log(`Client not ready, waiting...`);
@@ -46,32 +45,35 @@ async function notifyAdmin(message) {
                 }
             });
         }
+
+        const adminContact = `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
         
-        const sent = await global.client.sendMessage(adminContact, message);
-        return sent;
+        try {
+            await global.client.sendMessage(adminContact, message);
+        } catch (error) {
+            console.error('Error sending message to admin:', error.message);
+            return null;
+        }
     } catch (error) {
         console.error(`Failed to notify admin:`, error.message);
-        throw error;
+        return null;
     }
 }
 
 // Function to run ChatGPT completion
-async function runCompletion(prompt, group) {
+const runCompletion = async (prompt, temperature = 1, model = null) => {
     try {
-        const completePrompt = config.PROMPTS[group === 1 ? 'GROUP1' : 'GROUP2'] + prompt;
         const completion = await openai.chat.completions.create({
-            messages: [
-                { role: 'system', content: 'You are a WhatsApp group assistant.' },
-                { role: 'user', content: completePrompt }
-            ],
-            model: 'gpt-4o-mini',
+            model: model || config.SYSTEM.OPENAI_MODELS.DEFAULT,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: temperature
         });
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error(`An error occurred in the runCompletion function:`, error.message);
-        return '';
+        console.error('Error in runCompletion:', error);
+        throw error;
     }
-}
+};
 
 // Function to extract links from message
 function extractLinks(messageText) {
@@ -216,7 +218,7 @@ async function downloadImage(url) {
         if (url.startsWith('data:image')) {
             const base64Data = url.split('base64,')[1];
             const buffer = Buffer.from(base64Data, 'base64');
-            await fs.writeFile(filePath, buffer);
+            await fsPromises.writeFile(filePath, buffer);
         } else {
             const response = await axios({
                 url,
@@ -224,11 +226,11 @@ async function downloadImage(url) {
                 responseType: 'arraybuffer'
             });
             const buffer = Buffer.from(response.data, 'binary');
-            await fs.writeFile(filePath, buffer);
+            await fsPromises.writeFile(filePath, buffer);
         }
         return filePath;
     } catch (error) {
-        console.error(`An error occurred while downloading the image:`, error.message);
+        console.error(`Error downloading image:`, error.message);
         return null;
     }
 }
@@ -246,7 +248,6 @@ async function deleteFile(filePath) {
 // Function to scrape news
 async function scrapeNews() {
     try {
-        console.log(`--scrapeNews`);
         const url = 'https://www.newsminimalist.com/';
         const response = await axios.get(url);
 
@@ -281,43 +282,33 @@ async function scrapeNews() {
 
 // Function to translate news to Portuguese
 async function translateToPortuguese(news) {
-    console.log(`--translateToPortuguese`);
-    const nonEmptyNews = news.filter(item => item.trim() !== '');
-    const newsText = nonEmptyNews.join('\n');
-    const prompt = config.PROMPTS.TRANSLATE_NEWS.replace('{newsText}', newsText);
+    if (!Array.isArray(news) || news.length === 0) {
+        return [];
+    }
 
     try {
+        const newsText = news.join('\n');
+        const prompt = `Translate the following news to Portuguese. Keep the format and any source information in parentheses:\n\n${newsText}`;
         const completion = await runCompletion(prompt, 1);
-        const translatedNews = completion.trim().split('\n');
-        return translatedNews;
+        return completion.trim().split('\n').filter(item => item.trim() !== '');
     } catch (error) {
-        console.error(`Translation failed for the news text:`, error.message);
+        console.error(`[ERROR] Translation failed:`, error.message);
         return news;
     }
 }
 
-// Function to scrape football news
-async function scrapeNews2() {
+// Function to scrape news with search term
+async function scrapeNews2(searchTerm) {
     try {
-        console.log(`--scrapeNews2`);
-        const url = 'https://ge.globo.com/futebol/';
+        const query = encodeURIComponent(searchTerm);
+        const url = `https://news.google.com/rss/search?q=${query}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
         const response = await axios.get(url);
-        const $ = cheerio.load(response.data);
-        const newsElements = $('.feed-post-body');
-
-        const news = [];
-        newsElements.each((index, element) => {
-            if (index < 5) {
-                const title = $(element).find('.feed-post-body-title a').text().trim();
-                const summary = $(element).find('.feed-post-body-resumo').text().trim();
-                const link = $(element).find('.feed-post-body-title a').attr('href');
-                news.push({ title, summary, link });
-            }
-        });
-
-        return news;
+        const xmlString = response.data;
+        const newsItems = parseXML(xmlString).slice(0, 5);
+        
+        return newsItems.map(item => `${item.title} (${item.source})`);
     } catch (error) {
-        console.error(`An error occurred in the scrapeNews2 function:`, error.message);
+        console.error(`[ERROR] An error occurred in the scrapeNews2 function:`, error.message);
         return [];
     }
 }
@@ -356,21 +347,29 @@ async function generateImage(prompt, cfg_scale = 7) {
             cfg_scale: cfg_scale
         }, {
             headers: {
-                'Authorization': `Bearer ${config.GETIMG_AI_API_KEY}`,
+                'Authorization': `Bearer ${config.CREDENTIALS.GETIMG_AI_API_KEY}`,
                 'Content-Type': 'application/json'
             }
         });
         return response.data.image;
     } catch (error) {
-        console.error('Error generating image:', error.response ? error.response.data : error.message);
+        console.error('[ERROR] Error generating image:', error.response ? error.response.data : error.message);
         return null;
     }
 }
 
 async function improvePrompt(prompt) {
-    const improvePromptTemplate = config.PROMPTS.IMPROVE_IMAGE_PROMPT;
-    const improvedPrompt = await runCompletion(improvePromptTemplate.replace('{prompt}', prompt), 1);
-    return improvedPrompt.trim();
+    try {
+        const completion = await openai.chat.completions.create({
+            model: config.SYSTEM.OPENAI_MODEL || "gpt-3.5-turbo",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7
+        });
+        return completion.choices[0].message.content;
+    } catch (error) {
+        console.error('OpenAI API Error:', error.message);
+        throw error;
+    }
 }
 
 async function getPageContentWithRetry(url, maxRetries = 3) {
@@ -505,6 +504,79 @@ async function getTweetCount(username) {
     }
 }
 
+// Function to save configuration changes to file
+async function saveConfig() {
+    try {
+        const configPath = path.join(__dirname, 'config.js');
+        
+        // Special handling for PERIODIC_SUMMARY section
+        if (config.PERIODIC_SUMMARY) {
+            // Format the groups configuration with proper indentation
+            const groupsConfig = Object.entries(config.PERIODIC_SUMMARY.groups || {})
+                .map(([name, settings]) => {
+                    const prompt = settings.prompt || config.PERIODIC_SUMMARY.defaults.prompt;
+                    // Properly escape backticks and quotes in the prompt
+                    const escapedPrompt = prompt.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+                    
+                    return `        '${name}': {
+            enabled: ${settings.enabled !== false},
+            intervalHours: ${settings.intervalHours || config.PERIODIC_SUMMARY.defaults.intervalHours},
+            quietTime: {
+                start: '${settings.quietTime?.start || config.PERIODIC_SUMMARY.defaults.quietTime.start}',
+                end: '${settings.quietTime?.end || config.PERIODIC_SUMMARY.defaults.quietTime.end}'
+            },
+            deleteAfter: ${settings.deleteAfter === null ? 'null' : settings.deleteAfter},
+            model: "${settings.model || config.PERIODIC_SUMMARY.defaults.model}",
+            prompt: \`${escapedPrompt}\`
+        }`
+                })
+                .join(',\n');
+
+            const periodicSummarySection = `const PERIODIC_SUMMARY = {
+    enabled: ${config.PERIODIC_SUMMARY.enabled},
+    defaults: {
+        intervalHours: ${config.PERIODIC_SUMMARY.defaults.intervalHours},
+        quietTime: {
+            start: '${config.PERIODIC_SUMMARY.defaults.quietTime.start}',
+            end: '${config.PERIODIC_SUMMARY.defaults.quietTime.end}'
+        },
+        deleteAfter: ${config.PERIODIC_SUMMARY.defaults.deleteAfter === null ? 'null' : config.PERIODIC_SUMMARY.defaults.deleteAfter},
+        model: "${config.PERIODIC_SUMMARY.defaults.model}",
+        prompt: \`${config.PERIODIC_SUMMARY.defaults.prompt.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`
+    },
+    groups: {
+${groupsConfig}
+    }
+};`;
+
+            // Read the current file content
+            const currentContent = await fsPromises.readFile(configPath, 'utf8');
+            
+            // Replace the PERIODIC_SUMMARY section
+            const updatedContent = currentContent.replace(
+                /const\s+PERIODIC_SUMMARY\s*=\s*{[^]*?};/s,
+                periodicSummarySection
+            );
+            
+            // Write the updated content back to the file
+            await fsPromises.writeFile(configPath, updatedContent, 'utf8');
+            console.log('Configuration saved successfully');
+            return;
+        }
+
+        // For other changes, use the default JSON.stringify approach
+        const configContent = `// config.js - Generated ${new Date().toISOString()}
+
+module.exports = ${JSON.stringify(config, null, 2)};`;
+
+        await fsPromises.writeFile(configPath, configContent, 'utf8');
+        console.log('Configuration saved successfully');
+    } catch (error) {
+        console.error('Error saving configuration:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     Client,
     LocalAuth,
@@ -539,5 +611,6 @@ module.exports = {
     improvePrompt,
     getPageContentWithRetry,
     transcribeAudio,
-    getTweetCount
+    getTweetCount,
+    saveConfig
 };

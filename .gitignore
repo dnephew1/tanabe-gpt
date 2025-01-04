@@ -5,7 +5,7 @@ backup_index.js
 package-lock.json
 commands.txt
 .cursorignore
-group1_messages.json
+messages_*.json
 debug.png
 tanabe-gpt.log
 tanabe_monitor.py
