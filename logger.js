@@ -9,18 +9,6 @@ const LOG_LEVELS = {
     SUMMARY: 'SUMMARY'
 };
 
-// Configuration for which events to notify admin about
-const NOTIFY_ADMIN_EVENTS = {
-    ERROR: true,
-    WARN: false,
-    INFO: false,
-    DEBUG: false,
-    STARTUP: true,
-    SHUTDOWN: true,
-    COMMAND: false,
-    SUMMARY: true
-};
-
 // Function to notify admin
 async function notifyAdmin(message) {
     try {
@@ -68,7 +56,7 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
     const formattedMessage = formatLog(level, message, error);
     console.log(formattedMessage);
 
-    if (shouldNotifyAdmin && NOTIFY_ADMIN_EVENTS[level]) {
+    if (shouldNotifyAdmin && config.NOTIFY_ADMIN_EVENTS?.[level]) {
         await notifyAdmin(formattedMessage);
     }
 }
