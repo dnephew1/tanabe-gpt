@@ -1,124 +1,42 @@
-const { config, notifyAdmin } = require('./dependencies');
-const path = require('path');
 const fs = require('fs').promises;
+const path = require('path');
+const { config } = require('./dependencies');
 
-const TWITTER_COOKIES_DIR = path.join(__dirname, '.twitter_cookies');
+// Cache directories to clear
+const CACHE_DIRS = [
+    'temp',
+    'cache',
+    'downloads'
+];
 
-// Function to ensure Twitter cookies directory exists
-async function ensureTwitterCookiesDir() {
-    try {
-        await fs.access(TWITTER_COOKIES_DIR);
-    } catch {
-        await fs.mkdir(TWITTER_COOKIES_DIR, { recursive: true });
-    }
-}
-
-// Function to save Twitter cookies
-async function saveTwitterCookies(cookies) {
-    await ensureTwitterCookiesDir();
-    await fs.writeFile(
-        path.join(TWITTER_COOKIES_DIR, 'cookies.json'),
-        JSON.stringify(cookies, null, 2)
-    );
-}
-
-// Function to load Twitter cookies
-async function loadTwitterCookies() {
-    try {
-        const cookiesFile = path.join(TWITTER_COOKIES_DIR, 'cookies.json');
-        const data = await fs.readFile(cookiesFile, 'utf8');
-        return JSON.parse(data);
-    } catch {
-        return null;
-    }
-}
-
-async function startupCacheClearing() {
-    if (!config.ENABLE_STARTUP_CACHE_CLEARING) {
-        console.log('Startup cache clearing is disabled');
-        return;
-    }
-
-    try {
-        await performCacheClearing();
-    } catch (error) {
-        console.error('Failed to clear cache:', error.message);
-        await notifyAdmin("Failed to clear cache: " + error.message).catch(console.error);
-    }
-}
-
-// Function to perform cache clearing
+/**
+ * Clears all cache directories
+ */
 async function performCacheClearing() {
-    // Save Twitter cookies before clearing cache
-    if (global.client && global.client.pupBrowser) {
+    for (const dir of CACHE_DIRS) {
+        const dirPath = path.join(__dirname, dir);
         try {
-            const page = (await global.client.pupBrowser.pages())[0];
-            if (page) {
-                const cookies = await page.cookies();
-                const twitterCookies = cookies.filter(cookie => 
-                    cookie.domain.includes('twitter.com') || 
-                    cookie.domain.includes('x.com')
-                );
-                if (twitterCookies.length > 0) {
-                    await saveTwitterCookies(twitterCookies);
+            const files = await fs.readdir(dirPath);
+            for (const file of files) {
+                const filePath = path.join(dirPath, file);
+                try {
+                    const stats = await fs.stat(filePath);
+                    if (stats.isFile()) {
+                        await fs.unlink(filePath);
+                    }
+                } catch (error) {
+                    console.error(`Error deleting file ${filePath}:`, error.message);
                 }
             }
+            console.log(`Cleared cache directory: ${dir}`);
         } catch (error) {
-            console.error(`Error saving Twitter cookies:`, error.message);
-        }
-    }
-
-    await clearWhatsAppCache();
-    await clearPuppeteerCache();
-    console.log(`Cache clearing process completed`);
-
-    // Restore Twitter cookies after clearing cache
-    if (global.client && global.client.pupBrowser) {
-        try {
-            const cookies = await loadTwitterCookies();
-            if (cookies) {
-                const page = (await global.client.pupBrowser.pages())[0];
-                if (page) {
-                    await page.setCookie(...cookies);
-                    console.log(`Twitter cookies restored successfully`);
-                }
+            if (error.code !== 'ENOENT') {
+                console.error(`Error clearing cache directory ${dir}:`, error.message);
             }
-        } catch (error) {
-            console.error(`Error restoring Twitter cookies:`, error.message);
-        }
-    }
-}
-
-// Function to clear WhatsApp Web cache
-async function clearWhatsAppCache() {
-    const cacheDir = path.join(__dirname, '.wwebjs_cache');
-    
-    if (await fs.access(cacheDir).then(() => true).catch(() => false)) {
-        try {
-            await fs.rm(cacheDir, { recursive: true, force: true });
-        } catch (err) {
-            console.error(`Error clearing WhatsApp Web cache:`, err.message);
-        }
-    }
-}
-
-// Function to clear Puppeteer's cache
-async function clearPuppeteerCache() {
-    if (global.client && global.client.pupBrowser) {
-        try {
-            const pages = await global.client.pupBrowser.pages();
-            for (let i = 1; i < pages.length; i++) {
-                await pages[i].close();
-            }
-        } catch (error) {
-            console.error(`Error clearing Puppeteer cache:`, error.message);
         }
     }
 }
 
 module.exports = {
-    startupCacheClearing,
-    performCacheClearing,
-    saveTwitterCookies,
-    loadTwitterCookies
+    performCacheClearing
 };
