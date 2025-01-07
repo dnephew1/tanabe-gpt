@@ -11,7 +11,7 @@ process.on('warning', (warning) => {
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { config } = require('./dependencies');
-const { setupListeners } = require('./listener');
+const setupListeners = require('./listener');
 const { runPeriodicSummary } = require('./periodicSummary');
 const { initializeMessageLog } = require('./messageLogger');
 const { initializeTwitterMonitor } = require('./twitterMonitor');
@@ -207,23 +207,31 @@ function isQuietTimeForGroup(groupName, time) {
 // Initialize bot components
 async function initializeBot() {
     try {
-        // Set up event listeners before initialization
-        client.on('qr', qr => {
-            logger.info('Scan QR code to authenticate');
-            qrcode.generate(qr, { small: true });
+        // Initialize WhatsApp client
+        const client = new Client({
+            authStrategy: new LocalAuth(),
+            puppeteer: {
+                args: ['--no-sandbox']
+            }
         });
 
-        client.on('auth_failure', (msg) => {
-            logger.error('Authentication failed', msg);
+        // Set up error handling
+        client.on('auth_failure', () => {
+            logger.error('Authentication failed');
+            process.exit(1);
         });
 
-        // Set up disconnection handler
         client.on('disconnected', (reason) => {
-            logger.warn(`Client disconnected: ${reason}`);
-            reconnectClient();
+            logger.error('Client was disconnected', reason);
+            process.exit(1);
         });
 
-        // Wait for client to be ready
+        // Initialize the client
+        await client.initialize();
+
+        // Store client globally for admin notifications
+        global.client = client;
+
         await new Promise((resolve, reject) => {
             let isInitialized = false;
 
@@ -243,6 +251,9 @@ async function initializeBot() {
                     // Initialize components only after client is ready
                     await initializeMessageLog(client);
                     
+                    // Set up all message listeners
+                    await setupListeners(client);
+                    
                     if (config.PERIODIC_SUMMARY?.enabled) {
                         scheduleNextSummary();
                     }
@@ -251,40 +262,21 @@ async function initializeBot() {
                         await initializeTwitterMonitor(client);
                     }
 
-                    // Set up message handler
-                    client.on('message', async (message) => {
-                        try {
-                            const userId = message.from;
-                            const isCommand = message.body.startsWith('#') || message.body.startsWith('@');
-                            const hasActiveSession = config.COMMANDS.RESUMO_CONFIG.activeSessions[userId];
+                    const startupMessage = `Bot is now online and ready`;
+                    await logger.startup(startupMessage);
 
-                            if (isCommand || hasActiveSession) {
-                                const contact = await message.getContact();
-                                const user = contact.name || contact.pushname || contact.number;
-                                logger.command(message.body, user);
-                                await processCommand(message);
-                            }
-                        } catch (error) {
-                            logger.error('Error processing message', error);
-                        }
-                    });
-
-                    logger.startup('Bot ready');
                     resolve();
                 } catch (error) {
                     reject(error);
                 }
             });
 
-            // Initialize the client
-            client.initialize().catch(reject);
-
-            // Add timeout
+            // Set a timeout for initialization
             setTimeout(() => {
                 if (!isInitialized) {
                     reject(new Error('Client initialization timed out'));
                 }
-            }, 60000);
+            }, 30000);
         });
     } catch (error) {
         logger.error('Failed to initialize bot', error);

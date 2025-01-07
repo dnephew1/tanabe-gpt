@@ -5,10 +5,10 @@ backup_index.js
 package-lock.json
 commands.txt
 .cursorignore
-messages_*.json
 debug.png
 tanabe-gpt.log
 tanabe_monitor.py
 tanabe-gpt.service
 start.sh
 config_copy.js
+personalities.js

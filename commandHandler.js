@@ -4,6 +4,7 @@ const { config, saveConfig, runCompletion } = require('./dependencies');
 const { getMessageHistory } = require('./messageLogger');
 const { handleCommand } = require('./commandImplementations');
 const { deleteMessageAfterTimeout } = require('./commands');
+const logger = require('./logger');
 
 // Validate config initialization
 if (!config || !config.COMMANDS || !config.COMMANDS.RESUMO_CONFIG) {
@@ -47,56 +48,38 @@ async function processCommand(message) {
         }
     }
 
-    // If message doesn't start with a command prefix and there's no active session, return false
-    if (!messageBody.startsWith('#') && !messageBody.startsWith('@')) {
-        return false;
-    }
-
-    // Check if starting a new wizard session
-    if (messageBody.startsWith('#ferramentaresumo')) {
-        console.log('[RESUMO_CONFIG] Starting new wizard session');
-        const existingGroups = config.PERIODIC_SUMMARY?.groups && typeof config.PERIODIC_SUMMARY.groups === 'object' ? Object.keys(config.PERIODIC_SUMMARY.groups) : [];
-        console.log('[RESUMO_CONFIG] Found existing groups:', existingGroups);
-
-        config.COMMANDS.RESUMO_CONFIG.activeSessions[userId] = {
-            state: config.COMMANDS.RESUMO_CONFIG.states.AWAITING_GROUP_NAME,
-            data: {},
-            lastActivity: Date.now()
-        };
-
-        let welcomeMessage = 'Bem-vindo ao assistente de configuração de resumos automáticos!\n\n';
-        
-        if (existingGroups.length > 0) {
-            welcomeMessage += '*Grupos Configurados:*\n';
-            existingGroups.forEach((group, index) => {
-                const groupConfig = config.PERIODIC_SUMMARY.groups[group];
-                const status = groupConfig.enabled !== false ? '✅' : '❌';
-                welcomeMessage += `${index + 1}. ${status} ${group}\n`;
-            });
-            welcomeMessage += '\nSelecione um número para editar um grupo existente ou digite um novo nome de grupo para criar. Escreva "cancelar" para cancelar a sessão.';
-        } else {
-            welcomeMessage += 'Nenhum grupo configurado. Digite o nome *exato* do grupo que você deseja configurar:';
-        }
-
-        await message.reply(welcomeMessage);
-        return true;
-    }
-
-    // Process regular commands
+    // Find matching command
     const command = await findCommand(message);
-    if (!command) {
-        return false;
-    }
+    if (!command) return false;
 
-    try {
-        await handleCommand(message, command, messageBody.split(' '));
-        return true;
-    } catch (error) {
-        console.error(`[ERROR] Error processing command ${command.name}:`, error.message);
-        const errorMessage = await message.reply(command.errorMessages.error || 'An error occurred while processing your command.');
+    // Check permissions
+    const chat = await message.getChat();
+    const chatId = chat.isGroup ? chat.name : userId;
+    
+    if (!isCommandAllowedInChat(command, chatId)) {
+        const errorMessage = await message.reply(command.errorMessages?.notAllowed || 'You do not have permission to use this command.');
         await handleAutoDelete(errorMessage, command, true);
         return true;
     }
+
+    // Process the command
+    try {
+        const input = messageBody.split(' ');
+        await handleCommand(message, command, input);
+        return true;
+    } catch (error) {
+        logger.error(`Error processing command ${command.name}:`, error);
+        const errorMessage = await message.reply(command.errorMessages?.error || 'An error occurred while processing your command.');
+        await handleAutoDelete(errorMessage, command, true);
+        return true;
+    }
+}
+
+// Helper function to check if command is allowed in chat
+function isCommandAllowedInChat(command, chatId) {
+    if (!command.permissions?.allowedIn) return true;
+    if (command.permissions.allowedIn === 'all') return true;
+    return command.permissions.allowedIn.includes(chatId);
 }
 
 // Helper function to handle auto-deletion of messages
@@ -117,7 +100,7 @@ async function getPromptWithContext(commandName, promptName, message, replacemen
     
     // Check if the command and prompt exist
     if (!config.PROMPTS[commandName] || !config.PROMPTS[commandName][promptName]) {
-        console.error(`Prompt not found: ${commandName}.${promptName}`);
+        logger.error(`Prompt not found: ${commandName}.${promptName}`);
         throw new Error('Prompt template not found');
     }
     
@@ -137,10 +120,37 @@ async function getPromptWithContext(commandName, promptName, message, replacemen
         replacements.groupPersonality = '';
     }
 
-    // Replace all placeholders
+    // Log the initial prompt and replacements
+    logger.debug('Generating prompt', {
+        command: commandName,
+        promptType: promptName,
+        replacements: JSON.stringify(replacements)
+    });
+
+    // Replace all placeholders using a more robust approach
+    // First, escape any special regex characters in the prompt
+    prompt = prompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Then replace each variable
     for (const [key, value] of Object.entries(replacements)) {
-        prompt = prompt.replace(new RegExp(`{${key}}`, 'g'), value);
+        // Create a regex that matches the exact variable pattern
+        const regex = new RegExp(`\\{${key}\\}`, 'g');
+        // Replace with the value, properly escaped
+        prompt = prompt.replace(regex, value.toString());
+        
+        // Log each replacement
+        logger.debug(`Replacing {${key}}`, {
+            before: prompt.substring(0, 50) + '...',
+            value: value.toString().substring(0, 50) + '...'
+        });
     }
+
+    // Log the final prompt for debugging
+    logger.debug('Final prompt', {
+        command: commandName,
+        promptType: promptName,
+        prompt: prompt
+    });
 
     return prompt;
 }
@@ -224,37 +234,18 @@ async function findCommand(message) {
         return null;
     }
 
-    // Handle regular commands
-    if (messageBody.startsWith('#')) {
-        const input = messageBody.slice(1).split(' ');
-        const commandText = input[0].toLowerCase();
-        const secondWord = input[1]?.toLowerCase();
-
-        // Special case for '#ayub news'
-        if (commandText === 'ayub' && secondWord === 'news') {
-            const ayubNewsCommand = config.COMMANDS.AYUB_NEWS;
-            return { ...ayubNewsCommand, name: 'AYUB_NEWS' };
-        }
-
-        // Check for specific command prefixes first
-        for (const [commandName, command] of Object.entries(config.COMMANDS)) {
-            if (command.prefixes && command.prefixes.some(prefix => {
-                // Remove the # from the prefix for comparison
-                const cleanPrefix = prefix.startsWith('#') ? prefix.slice(1) : prefix;
-                return cleanPrefix.toLowerCase() === messageBody.slice(1).toLowerCase().split(' ')[0];
-            }) && validateCommand(commandName, command)) {
-                return { ...command, name: commandName };
+    // Handle regular commands (# and ! prefixed)
+    for (const [commandName, command] of Object.entries(config.COMMANDS)) {
+        if (!command.prefixes || !Array.isArray(command.prefixes)) continue;
+        
+        for (const prefix of command.prefixes) {
+            if (messageBody.toLowerCase().startsWith(prefix.toLowerCase())) {
+                if (validateCommand(commandName, command)) {
+                    return { ...command, name: commandName };
+                }
+                break;
             }
         }
-
-        // If no specific command prefix matched, treat as CHAT_GPT
-        const chatGptCommand = config.COMMANDS.CHAT_GPT;
-        return { ...chatGptCommand, name: 'CHAT_GPT' };
-    }
-
-    // Handle audio messages
-    if (message.hasMedia && (message.type === 'audio' || message.type === 'ptt')) {
-        return { ...config.COMMANDS.AUDIO, name: 'AUDIO' };
     }
 
     return null;
@@ -805,7 +796,6 @@ async function handleWizardResponse(message, session) {
 async function handleChatGPT(message) {
     try {
         const chat = await message.getChat();
-        const messageHistory = await getMessageHistory(chat.name);
         
         // Get the question from the message
         const question = message.body.slice(message.body.startsWith('#!') ? 2 : 1).trim();
@@ -818,15 +808,27 @@ async function handleChatGPT(message) {
         const contact = await message.getContact();
         const name = contact.name || contact.pushname || contact.number;
 
-        // Get the appropriate prompt template
-        const promptTemplate = getPrompt('CHAT_GPT', 'DEFAULT', chat.name);
-        
-        // Replace placeholders in the prompt
-        const prompt = promptTemplate
-            .replace('{name}', name)
-            .replace('{question}', question)
-            .replace('{maxMessages}', config.SYSTEM.MAX_LOG_MESSAGES)
-            .replace('{messageHistory}', messageHistory);
+        logger.debug('Processing ChatGPT command', {
+            name,
+            question,
+            chatName: chat.name
+        });
+
+        // Get the prompt using getPromptWithContext
+        const prompt = await getPromptWithContext('CHAT_GPT', 'DEFAULT', message, {
+            name,
+            question,
+            maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
+            messageHistory: await getMessageHistory(config.SYSTEM.MAX_LOG_MESSAGES)
+        });
+
+        // Log the final prompt for debugging
+        logger.debug('ChatGPT prompt', {
+            name,
+            question,
+            maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
+            finalPrompt: prompt
+        });
 
         // Get response from ChatGPT
         const response = await runCompletion(prompt);

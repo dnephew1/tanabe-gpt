@@ -28,7 +28,7 @@ async function performCacheClearing() {
                     console.error(`Error deleting file ${filePath}:`, error.message);
                 }
             }
-            console.log(`Cleared cache directory: ${dir}`);
+            console.info(`Cleared cache directory: ${dir}`);
         } catch (error) {
             if (error.code !== 'ENOENT') {
                 console.error(`Error clearing cache directory ${dir}:`, error.message);

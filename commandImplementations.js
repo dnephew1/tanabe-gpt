@@ -24,53 +24,92 @@ const {
 } = require('./dependencies');
 const { getPromptWithContext, handleAutoDelete } = require('./utils');
 const { performCacheClearing } = require('./cacheManagement');
+const { getMessageHistory } = require('./messageLogger');
 const path = require('path');
 const { handleResumoConfig } = require('./resumoConfig');
+const logger = require('./logger');
+const { debugTwitterFunctionality } = require('./twitterMonitor');
 
 // Command implementations
 const commandHandlers = {
     CHAT_GPT: async (message, command, input) => {
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        const question = message.body.substring(1);
-        
-        let prompt;
-        if (message.hasQuotedMsg) {
-            const quotedMessage = await message.getQuotedMessage();
-            const quotedText = quotedMessage.body;
-            const link = extractLinks(quotedText)[0];
+        try {
+            const contact = await message.getContact();
+            const name = contact.name || 'Unknown';
+            const question = message.body.substring(1);
+            const chat = await message.getChat();
+            const groupName = chat.isGroup ? chat.name : null;
+            
+            logger.debug('Processing ChatGPT command', {
+                name,
+                question,
+                hasQuoted: message.hasQuotedMsg,
+                groupName
+            });
 
-            if (link) {
-                try {
-                    const unshortenedLink = await unshortenLink(link);
-                    const pageContent = await getPageContent(unshortenedLink);
+            let prompt;
+            if (message.hasQuotedMsg) {
+                const quotedMessage = await message.getQuotedMessage();
+                const quotedText = quotedMessage.body;
+                const link = extractLinks(quotedText)[0];
+
+                if (link) {
+                    try {
+                        const unshortenedLink = await unshortenLink(link);
+                        const pageContent = await getPageContent(unshortenedLink);
+                        logger.debug('Got context from link', {
+                            link: unshortenedLink,
+                            contentLength: pageContent.length
+                        });
+                        prompt = await getPromptWithContext('CHAT_GPT', 'WITH_CONTEXT', message, {
+                            name,
+                            question,
+                            context: pageContent,
+                            maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
+                            messageHistory: await getMessageHistory(groupName)
+                        });
+                    } catch (error) {
+                        const errorMessage = await message.reply('Não consegui acessar o link para fornecer contexto adicional.');
+                        await handleAutoDelete(errorMessage, command, true);
+                        return;
+                    }
+                } else {
+                    logger.debug('Using quoted message as context', {
+                        quotedLength: quotedText.length
+                    });
                     prompt = await getPromptWithContext('CHAT_GPT', 'WITH_CONTEXT', message, {
                         name,
                         question,
-                        context: pageContent
+                        context: quotedText,
+                        maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
+                        messageHistory: await getMessageHistory(groupName)
                     });
-                } catch (error) {
-                    const errorMessage = await message.reply('Não consegui acessar o link para fornecer contexto adicional.');
-                    await handleAutoDelete(errorMessage, command, true);
-                    return;
                 }
             } else {
-                prompt = await getPromptWithContext('CHAT_GPT', 'WITH_CONTEXT', message, {
+                const messageHistory = await getMessageHistory(groupName);
+                logger.debug('Using default prompt without context', {
+                    messageHistoryLength: messageHistory?.length || 0,
+                    groupName
+                });
+                prompt = await getPromptWithContext('CHAT_GPT', 'DEFAULT', message, {
                     name,
                     question,
-                    context: quotedText
+                    maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
+                    messageHistory: messageHistory
                 });
             }
-        } else {
-            prompt = await getPromptWithContext('CHAT_GPT', 'DEFAULT', message, {
-                name,
-                question
-            });
-        }
 
-        const result = await runCompletion(prompt, 1, command.model);
-        const response = await message.reply(result.trim());
-        await handleAutoDelete(response, command);
+            // Log the complete prompt
+            logger.prompt(`ChatGPT prompt for ${name} in ${groupName || 'DM'}`, prompt);
+
+            const result = await runCompletion(prompt, 1, command.model);
+            const response = await message.reply(result.trim());
+            await handleAutoDelete(response, command);
+        } catch (error) {
+            logger.error(`Error in CHAT_GPT handler for ${name} in ${groupName || 'DM'}:`, error);
+            const errorMessage = await message.reply(command.errorMessages.error || 'An error occurred while processing your request.');
+            await handleAutoDelete(errorMessage, command);
+        }
     },
 
     RESUMO: async (message, command, input) => {
@@ -487,6 +526,16 @@ const commandHandlers = {
 
     RESUMO_CONFIG: async (message, command, input) => {
         await handleResumoConfig(message);
+    },
+
+    TWITTER_DEBUG: async (message, command) => {
+        try {
+            await debugTwitterFunctionality(message);
+        } catch (error) {
+            logger.error('Error in Twitter debug command:', error);
+            const errorMessage = await message.reply(command.errorMessages.error);
+            await handleAutoDelete(errorMessage, command);
+        }
     },
 };
 
