@@ -1,6 +1,7 @@
 config.js
 node_modules
 .wwebjs_auth
+.wwebjs_cache
 backup_index.js
 package-lock.json
 commands.txt
