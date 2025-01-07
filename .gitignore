@@ -13,3 +13,4 @@ tanabe-gpt.service
 start.sh
 config_copy.js
 personalities.js
+.DS_Store
