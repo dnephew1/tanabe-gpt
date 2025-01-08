@@ -59,7 +59,7 @@ async function processCommand(message) {
     // Check permissions
     const chatId = chat.isGroup ? chat.id._serialized : userId;
     
-    if (!isCommandAllowedInChat(command, chatId)) {
+    if (!await isCommandAllowedInChat(command, chatId)) {
         const errorMessage = await message.reply(command.errorMessages?.notAllowed || 'You do not have permission to use this command.');
         await handleAutoDelete(errorMessage, command, true);
         return true;
@@ -83,7 +83,7 @@ async function processCommand(message) {
 }
 
 // Helper function to check if command is allowed in chat
-function isCommandAllowedInChat(command, chatId) {
+async function isCommandAllowedInChat(command, chatId) {
     // Admin always has access to all commands
     if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us` || 
         chatId === config.CREDENTIALS.ADMIN_NUMBER ||
@@ -97,7 +97,18 @@ function isCommandAllowedInChat(command, chatId) {
     
     // Check specific permissions
     if (Array.isArray(command.permissions.allowedIn)) {
-        return command.permissions.allowedIn.includes(chatId);
+        try {
+            // For group chats, check if the group name is in allowedIn
+            const chat = await global.client.getChatById(chatId);
+            if (chat && chat.isGroup) {
+                return command.permissions.allowedIn.includes(chat.name);
+            }
+            // For DMs, check if the chatId is in allowedIn
+            return command.permissions.allowedIn.includes(chatId);
+        } catch (error) {
+            logger.error('Error checking command permissions:', error);
+            return false;
+        }
     }
     
     return false;

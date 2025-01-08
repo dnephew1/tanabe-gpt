@@ -13,14 +13,12 @@ function setupListeners(client) {
             // Get chat first
             chat = await message.getChat();
             
-            // Send typing state
-            await chat.sendStateTyping();
-
             // Handle audio messages first
             if (message.hasMedia && (message.type === 'audio' || message.type === 'ptt')) {
                 const command = config.COMMANDS.AUDIO;
                 if (command) {
                     try {
+                        await chat.sendStateTyping();
                         const contact = await message.getContact();
                         const user = contact.name || contact.pushname || contact.number;
                         const chatType = chat.isGroup ? chat.name : 'DM';
@@ -35,7 +33,10 @@ function setupListeners(client) {
             }
 
             // Process other commands
-            await processCommand(message);
+            const isCommand = await processCommand(message);
+            if (isCommand) {
+                await chat.sendStateTyping();
+            }
 
         } catch (error) {
             logger.error('Error processing message:', error);
