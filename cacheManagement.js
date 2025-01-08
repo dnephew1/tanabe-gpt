@@ -1,18 +1,19 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { config } = require('./dependencies');
+const logger = require('./logger');
 
 // Cache directories to clear
 const CACHE_DIRS = [
-    'temp',
-    'cache',
-    'downloads'
+    '.wwebjs_cache'
 ];
 
 /**
- * Clears all cache directories
+ * Clears WhatsApp Web.js and Puppeteer caches while preserving authentication
  */
 async function performCacheClearing() {
+    let clearedFiles = 0;
+
     for (const dir of CACHE_DIRS) {
         const dirPath = path.join(__dirname, dir);
         try {
@@ -21,20 +22,26 @@ async function performCacheClearing() {
                 const filePath = path.join(dirPath, file);
                 try {
                     const stats = await fs.stat(filePath);
+                    // Skip auth files
+                    if (file.includes('session') || file.includes('auth')) {
+                        continue;
+                    }
                     if (stats.isFile()) {
                         await fs.unlink(filePath);
+                        clearedFiles++;
                     }
                 } catch (error) {
-                    console.error(`Error deleting file ${filePath}:`, error.message);
+                    logger.error(`Error deleting cache file ${filePath}:`, error);
                 }
             }
-            console.info(`Cleared cache directory: ${dir}`);
         } catch (error) {
             if (error.code !== 'ENOENT') {
-                console.error(`Error clearing cache directory ${dir}:`, error.message);
+                logger.error(`Error accessing cache directory ${dir}:`, error);
             }
         }
     }
+
+    return { clearedFiles };
 }
 
 module.exports = {

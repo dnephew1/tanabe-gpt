@@ -207,7 +207,6 @@ async function downloadImage(url) {
 async function deleteFile(filePath) {
     try {
         await fsPromises.unlink(filePath);
-        console.log(`File deleted successfully`);
     } catch (error) {
         console.error(`Error deleting file:`, error.message);
     }

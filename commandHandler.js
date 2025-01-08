@@ -5,6 +5,7 @@ const { getMessageHistory } = require('./messageLogger');
 const { handleCommand } = require('./commandImplementations');
 const { deleteMessageAfterTimeout } = require('./commands');
 const logger = require('./logger');
+const crypto = require('crypto');
 
 // Validate config initialization
 if (!config || !config.COMMANDS || !config.COMMANDS.RESUMO_CONFIG) {
@@ -21,6 +22,7 @@ async function processCommand(message) {
     const contact = await message.getContact();
     const userId = contact.id._serialized;
     const messageBody = message.body.trim();
+    const chat = await message.getChat();
 
     // Check for active wizard session first
     if (config.COMMANDS.RESUMO_CONFIG.activeSessions[userId]) {
@@ -40,7 +42,7 @@ async function processCommand(message) {
             await handleWizardResponse(message, activeSession);
             return true;
         } catch (error) {
-            console.error(`Error in wizard:`, error);
+            logger.error(`Error in wizard:`, error);
             const errorMessage = await message.reply(config.COMMANDS.RESUMO_CONFIG.errorMessages.error);
             await handleAutoDelete(errorMessage, config.COMMANDS.RESUMO_CONFIG, true);
             delete config.COMMANDS.RESUMO_CONFIG.activeSessions[userId];
@@ -50,11 +52,12 @@ async function processCommand(message) {
 
     // Find matching command
     const command = await findCommand(message);
-    if (!command) return false;
+    if (!command) {
+        return false;
+    }
 
     // Check permissions
-    const chat = await message.getChat();
-    const chatId = chat.isGroup ? chat.name : userId;
+    const chatId = chat.isGroup ? chat.id._serialized : userId;
     
     if (!isCommandAllowedInChat(command, chatId)) {
         const errorMessage = await message.reply(command.errorMessages?.notAllowed || 'You do not have permission to use this command.');
@@ -65,10 +68,14 @@ async function processCommand(message) {
     // Process the command
     try {
         const input = messageBody.split(' ');
+        // Log command before processing
+        const desc = await getCommandDescription(message, command);
+        if (desc) logger.info(desc);
+        
         await handleCommand(message, command, input);
         return true;
     } catch (error) {
-        logger.error(`Error processing command ${command.name}:`, error);
+        logger.error(`Error in command handler ${command.name}:`, error);
         const errorMessage = await message.reply(command.errorMessages?.error || 'An error occurred while processing your command.');
         await handleAutoDelete(errorMessage, command, true);
         return true;
@@ -77,9 +84,23 @@ async function processCommand(message) {
 
 // Helper function to check if command is allowed in chat
 function isCommandAllowedInChat(command, chatId) {
+    // Admin always has access to all commands
+    if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us` || 
+        chatId === config.CREDENTIALS.ADMIN_NUMBER ||
+        chatId === `${config.CREDENTIALS.ADMIN_NUMBER}`) {
+        return true;
+    }
+    
+    // Check if command allows all chats
     if (!command.permissions?.allowedIn) return true;
     if (command.permissions.allowedIn === 'all') return true;
-    return command.permissions.allowedIn.includes(chatId);
+    
+    // Check specific permissions
+    if (Array.isArray(command.permissions.allowedIn)) {
+        return command.permissions.allowedIn.includes(chatId);
+    }
+    
+    return false;
 }
 
 // Helper function to handle auto-deletion of messages
@@ -196,40 +217,43 @@ function validateCommand(commandName, commandConfig) {
 
 // Helper function to find the matching command configuration
 async function findCommand(message) {
+    const messageBody = message.body.trim();
+
     // Handle sticker commands first
     if (message.hasMedia && message.type === 'sticker') {
         try {
-            const stickerHash = message.mediaData?.fileSha256?.toString('hex') || message.stickerHash;
-            if (stickerHash) {
-                // Find command by sticker hash
+            const media = await message.downloadMedia();
+            if (media && media.data) {
+                const stickerHash = crypto.createHash('sha256').update(media.data).digest('hex');
+                logger.debug(`Calculated sticker hash: ${stickerHash}`);
+                
+                // Check for sticker command matches
                 for (const [commandName, command] of Object.entries(config.COMMANDS)) {
-                    if (command.stickerHash === stickerHash && validateCommand(commandName, command)) {
-                        return { ...command, name: commandName };
+                    logger.debug(`Checking command ${commandName} for sticker hash match`);
+                    logger.debug(`Command sticker hashes:`, command.stickerHashes);
+                    
+                    if (command.stickerHashes && Array.isArray(command.stickerHashes)) {
+                        if (command.stickerHashes.includes(stickerHash)) {
+                            logger.debug(`Found sticker command match: ${commandName}`);
+                            if (validateCommand(commandName, command)) {
+                                return { ...command, name: commandName };
+                            } else {
+                                logger.debug(`Command ${commandName} failed validation`);
+                            }
+                        }
+                    } else if (command.stickerHash === stickerHash) { // Try legacy single hash format
+                        logger.debug(`Found sticker command match (legacy format): ${commandName}`);
+                        if (validateCommand(commandName, command)) {
+                            return { ...command, name: commandName };
+                        } else {
+                            logger.debug(`Command ${commandName} failed validation`);
+                        }
                     }
                 }
+                logger.debug('No matching command found for sticker hash');
             }
         } catch (error) {
-            console.error('[ERROR] Error processing sticker:', error);
-        }
-        return null;
-    }
-
-    // Handle text commands
-    const messageBody = message.body;
-    if (!messageBody) return null;
-
-    // Handle tag commands
-    if (messageBody.startsWith('@')) {
-        const tag = messageBody.split(' ')[0].toLowerCase();
-        const chat = await message.getChat();
-        if (!chat.isGroup) return null;
-
-        const tagCommand = config.COMMANDS.TAG;
-        if (!tagCommand.groupTags[chat.name]) return null;
-
-        // Check if it's a special tag or group-specific tag
-        if (tagCommand.specialTags[tag] || tagCommand.groupTags[chat.name][tag]) {
-            return { ...tagCommand, name: 'TAG', tag: tag };
+            logger.error('Error processing sticker command:', error);
         }
         return null;
     }
@@ -239,12 +263,36 @@ async function findCommand(message) {
         if (!command.prefixes || !Array.isArray(command.prefixes)) continue;
         
         for (const prefix of command.prefixes) {
-            if (messageBody.toLowerCase().startsWith(prefix.toLowerCase())) {
+            // Special handling for #resumo
+            if (commandName === 'RESUMO' && messageBody.toLowerCase() === '#resumo') {
                 if (validateCommand(commandName, command)) {
                     return { ...command, name: commandName };
                 }
                 break;
             }
+            
+            // Check for exact command match first
+            if (messageBody.toLowerCase() === prefix.toLowerCase()) {
+                if (validateCommand(commandName, command)) {
+                    return { ...command, name: commandName };
+                }
+                break;
+            }
+            // Then check if message starts with prefix and has additional content
+            if (messageBody.toLowerCase().startsWith(prefix.toLowerCase() +' ')) {
+                if (validateCommand(commandName, command)) {
+                    return { ...command, name: commandName };
+                }
+                break;
+            }
+        }
+    }
+
+    // If no exact command match found and message starts with #, treat as ChatGPT
+    if (messageBody.startsWith('#')) {
+        const chatGptCommand = config.COMMANDS.CHAT_GPT;
+        if (validateCommand('CHAT_GPT', chatGptCommand)) {
+            return { ...chatGptCommand, name: 'CHAT_GPT' };
         }
     }
 
@@ -837,6 +885,37 @@ async function handleChatGPT(message) {
     } catch (error) {
         logger.error('Error in handleChatGPT:', error);
         await message.reply('Desculpe, ocorreu um erro ao processar sua pergunta.');
+    }
+}
+
+// Helper function to get command description
+async function getCommandDescription(message, command) {
+    const chat = await message.getChat();
+    const chatType = chat.isGroup ? chat.name : 'DM';
+    const contact = await message.getContact();
+    const user = contact.name || contact.pushname || contact.number;
+
+    if (!command) return null;
+
+    switch (command.name) {
+        case 'STICKER':
+            return `Sticker Creation by ${user} in ${chatType}`;
+        case 'CHAT_GPT':
+            return `ChatGPT Query by ${user} in ${chatType}`;
+        case 'RESUMO':
+            return `Summary Request by ${user} in ${chatType}`;
+        case 'AYUB_NEWS':
+            return `News Request by ${user} in ${chatType}`;
+        case 'AUDIO':
+            return `Audio Transcription by ${user} in ${chatType}`;
+        case 'COMMAND_LIST':
+            return `Command List Request by ${user} in ${chatType}`;
+        case 'CACHE_CLEAR':
+            return `Cache Clear by ${user}`;
+        case 'TAG':
+            return `Tag Command by ${user} in ${chatType}`;
+        default:
+            return `${command.name} by ${user} in ${chatType}`;
     }
 }
 

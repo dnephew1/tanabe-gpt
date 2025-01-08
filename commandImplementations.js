@@ -113,8 +113,8 @@ const commandHandlers = {
     },
 
     RESUMO: async (message, command, input) => {
-        // Handle sticker case
-        if (message.hasMedia && message.type === 'sticker') {
+        try {
+            // Handle case with quoted message
             if (message.hasQuotedMsg) {
                 const quotedMessage = await message.getQuotedMessage();
                 const quotedText = quotedMessage.body;
@@ -131,6 +131,7 @@ const commandHandlers = {
                         const response = await quotedMessage.reply(summary);
                         await handleAutoDelete(response, command);
                     } catch (error) {
+                        logger.error('Error summarizing link content:', error);
                         const errorMessage = await quotedMessage.reply(command.errorMessages.linkError);
                         await handleAutoDelete(errorMessage, command, true);
                     }
@@ -145,45 +146,10 @@ const commandHandlers = {
                     const response = await quotedMessage.reply(result.trim());
                     await handleAutoDelete(response, command);
                 }
-            } else {
-                const chat = await message.getChat();
-                const messages = await chat.fetchMessages({ limit: 1000 });
-                const hoursAgo = Date.now() - (command.defaultSummaryHours * 3600 * 1000);
-                const messagesLastHours = messages.filter(m => 
-                    m.timestamp * 1000 > hoursAgo && 
-                    !m.fromMe && 
-                    m.body.trim() !== ''
-                );
-
-                if (messagesLastHours.length === 0) {
-                    const errorMessage = await message.reply(command.errorMessages.noMessages);
-                    await handleAutoDelete(errorMessage, command, true);
-                    return;
-                }
-
-                const messageTexts = await Promise.all(messagesLastHours.map(async msg => {
-                    const contact = await msg.getContact();
-                    const name = contact.name || 'Unknown';
-                    return `>>${name}: ${msg.body}.\n`;
-                }));
-
-                const contact = await message.getContact();
-                const name = contact.name || 'Unknown';
-                const prompt = await getPromptWithContext('RESUMO', 'HOUR_SUMMARY', message, {
-                    name,
-                    messageTexts: messageTexts.join(' ')
-                });
-                const result = await runCompletion(prompt, 1);
-                const response = await message.reply(result.trim());
-                await handleAutoDelete(response, command);
+                return;
             }
-            return;
-        }
 
-        // Handle normal command case
-        const limit = parseInt(input[1]);
-        if (isNaN(limit)) {
-            // Use default hours if no number provided
+            // Handle case without quoted message (summarize last 3 hours)
             const chat = await message.getChat();
             const messages = await chat.fetchMessages({ limit: 1000 });
             const hoursAgo = Date.now() - (command.defaultSummaryHours * 3600 * 1000);
@@ -215,36 +181,11 @@ const commandHandlers = {
             const result = await runCompletion(prompt, 1, command.model);
             const response = await message.reply(result.trim());
             await handleAutoDelete(response, command);
-            return;
-        }
-
-        const chat = await message.getChat();
-        const messages = await chat.fetchMessages({ limit: limit });
-        const messagesWithoutMe = messages.slice(0, -1).filter(msg => !msg.fromMe && msg.body.trim() !== '');
-
-        if (messagesWithoutMe.length === 0) {
-            const errorMessage = await message.reply(command.errorMessages.noMessages);
+        } catch (error) {
+            logger.error('Error in RESUMO command:', error);
+            const errorMessage = await message.reply(command.errorMessages.error);
             await handleAutoDelete(errorMessage, command, true);
-            return;
         }
-
-        const messageTexts = await Promise.all(messagesWithoutMe.map(async msg => {
-            const contact = await msg.getContact();
-            const name = contact.name || 'Unknown';
-            return `>>${name}: ${msg.body}.\n`;
-        }));
-
-        const contact = await message.getContact();
-        const name = contact.name || 'Unknown';
-        const prompt = await getPromptWithContext('RESUMO', 'DEFAULT', message, {
-            name,
-            limit,
-            messageTexts: messageTexts.join(' ')
-        });
-
-        const result = await runCompletion(prompt, 1, command.model);
-        const response = await message.reply(result.trim());
-        await handleAutoDelete(response, command);
     },
 
     AYUB_NEWS: async (message, command, input) => {
@@ -539,26 +480,35 @@ const commandHandlers = {
     },
 };
 
+// Helper function to delete a file after a timeout
+async function deleteMessageAfterTimeout(message, isError = false) {
+    try {
+        await message.delete(true);
+        logger.debug('Message deleted successfully');
+    } catch (error) {
+        logger.error('Error deleting message:', error);
+    }
+}
+
 // Main command handler
 async function handleCommand(message, command, input) {
+    if (!command || !command.name) {
+        logger.error('Handler not found for command:', { command: command?.name || 'undefined' });
+        return;
+    }
+
     const handler = commandHandlers[command.name];
     if (!handler) {
-        console.error(`Handler not found for command: ${command.name}`);
-        const errorMessage = await message.reply(command.errorMessages?.error || 'Command not implemented.');
-        await handleAutoDelete(errorMessage, command, true);
+        logger.error(`No handler found for command: ${command.name}`);
         return;
     }
 
     try {
         await handler(message, command, input);
     } catch (error) {
-        const contact = await message.getContact();
-        const chat = await message.getChat();
-        const chatName = chat.name || 'DM';
-        console.error(`Error in ${command.name} handler for ${contact.name || 'Unknown'} in ${chatName}:`, error.message);
+        logger.error(`Error in command handler ${command.name}:`, error);
         const errorMessage = await message.reply(command.errorMessages?.error || 'An error occurred while processing your command.');
         await handleAutoDelete(errorMessage, command, true);
-        await notifyAdmin(`Error in ${command.name} handler: ${error.message}`);
     }
 }
 

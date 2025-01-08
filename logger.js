@@ -1,3 +1,5 @@
+const fs = require('fs').promises;
+const path = require('path');
 const config = require('./config');
 
 // Log levels
@@ -10,6 +12,11 @@ const LOG_LEVELS = {
     PROMPT: 'PROMPT'
 };
 
+// Log file configuration
+const LOG_FILE = 'tanabe-gpt.log';
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
+const BACKUP_LOG_FILE = 'tanabe-gpt.old.log';
+
 // Function to format error objects
 function formatError(error) {
     if (!error) return 'Unknown error';
@@ -19,7 +26,53 @@ function formatError(error) {
     return `${error.message} (at ${location})`;
 }
 
-// Function to notify admin
+// Function to format the log message with timestamp
+function formatLogWithTimestamp(level, message, error = null) {
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+    
+    let logMessage = `[${timestamp}] [${level}] ${message}`;
+    
+    if (error) {
+        logMessage += `: ${formatError(error)}`;
+    }
+    
+    return logMessage;
+}
+
+// Function to check log file size and rotate if needed
+async function checkAndRotateLog() {
+    try {
+        const stats = await fs.stat(LOG_FILE).catch(() => ({ size: 0 }));
+        
+        if (stats.size >= MAX_LOG_SIZE) {
+            // Backup existing log file
+            await fs.rename(LOG_FILE, BACKUP_LOG_FILE).catch(() => {});
+            // Create new empty log file
+            await fs.writeFile(LOG_FILE, '');
+        }
+    } catch (error) {
+        console.error('Error rotating log file:', error);
+    }
+}
+
+// Function to write to log file
+async function writeToLogFile(message) {
+    try {
+        await checkAndRotateLog();
+        await fs.appendFile(LOG_FILE, message + '\n');
+    } catch (error) {
+        console.error('Error writing to log file:', error);
+    }
+}
+
+// Functionto notify admin
 async function notifyAdmin(message) {
     try {
         if (!global.client) {
@@ -45,17 +98,6 @@ async function notifyAdmin(message) {
     }
 }
 
-// Formats the log message
-function formatLog(level, message, error = null) {
-    let logMessage = `[${level}] ${message}`;
-    
-    if (error) {
-        logMessage += `: ${formatError(error)}`;
-    }
-    
-    return logMessage;
-}
-
 // Core logging function
 async function log(level, message, error = null, shouldNotifyAdmin = false) {
     // Check if this log level is enabled in console settings
@@ -64,7 +106,10 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
     }
 
     // Format the message
-    const formattedMessage = formatLog(level, message, error);
+    const formattedMessage = formatLogWithTimestamp(level, message, error);
+    
+    // Write to log file
+    await writeToLogFile(formattedMessage);
     
     // Use appropriate console method based on level
     switch(level) {
@@ -75,14 +120,13 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
             console.warn(formattedMessage);
             break;
         case LOG_LEVELS.DEBUG:
-            // For debug messages, handle objects properly
             if (typeof message === 'object') {
-                console.log(formatLog(level, JSON.stringify(message, null, 2)));
+                console.log(formatLogWithTimestamp(level, JSON.stringify(message, null, 2)));
             } else {
                 console.log(formattedMessage);
             }
             if (error) {
-                console.log(formatLog(level, `Error: ${formatError(error)}`));
+                console.log(formatLogWithTimestamp(level, `Error: ${formatError(error)}`));
             }
             break;
         default:

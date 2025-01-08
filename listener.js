@@ -1,35 +1,49 @@
 // listener.js
 
-const { config, extractLinks, crypto } = require('./dependencies');
+const { config } = require('./dependencies');
 const logger = require('./logger');
 const { processCommand } = require('./commandHandler');
+const { handleCommand } = require('./commandImplementations');
 
 function setupListeners(client) {
-    logger.info('[SETUP] Setting up message listeners...');
-
     // Handle incoming messages
     client.on('message', async (message) => {
-        logger.debug('Received message', {
-            from: message.from,
-            body: message.body,
-            hasMedia: message.hasMedia,
-            type: message.type,
-            fromMe: message.fromMe
-        });
-
+        let chat;
         try {
-            const userId = message.from;
-            const isCommand = message.body.startsWith('#') || message.body.startsWith('@') || message.body.startsWith('!');
-            const hasActiveSession = config.COMMANDS.RESUMO_CONFIG.activeSessions[userId];
+            // Get chat first
+            chat = await message.getChat();
+            
+            // Send typing state
+            await chat.sendStateTyping();
 
-            if (isCommand || hasActiveSession) {
-                const contact = await message.getContact();
-                const user = contact.name || contact.pushname || contact.number;
-                logger.command(message.body, user);
-                await processCommand(message);
+            // Handle audio messages first
+            if (message.hasMedia && (message.type === 'audio' || message.type === 'ptt')) {
+                const command = config.COMMANDS.AUDIO;
+                if (command) {
+                    try {
+                        const contact = await message.getContact();
+                        const user = contact.name || contact.pushname || contact.number;
+                        const chatType = chat.isGroup ? chat.name : 'DM';
+                        logger.info(`Audio Transcription by ${user} in ${chatType}`);
+                        await handleCommand(message, { ...command, name: 'AUDIO' }, []);
+                    } catch (error) {
+                        logger.error('Error processing audio command:', error);
+                        await message.reply(command.errorMessages?.error || 'An error occurred while processing the audio.');
+                    }
+                    return;
+                }
             }
+
+            // Process other commands
+            await processCommand(message);
+
         } catch (error) {
-            logger.error('Error processing message', error);
+            logger.error('Error processing message:', error);
+        } finally {
+            // Clear typing state only if chat was successfully retrieved
+            if (chat) {
+                await chat.clearState();
+            }
         }
     });
 
@@ -68,7 +82,7 @@ function setupListeners(client) {
                 logger.debug('Found message in history', { 
                     found: !!message,
                     messageId: message?.id?._serialized,
-                    messageBody: message?.body // Log entire message body
+                    messageBody: message?.body
                 });
                 
                 if (message) {
@@ -97,8 +111,6 @@ function setupListeners(client) {
     client.on('group-leave', async (notification) => {
         logger.debug('[GROUP] Group leave notification received');
     });
-
-    logger.info('[SETUP] All listeners setup successfully');
 }
 
 module.exports = setupListeners;

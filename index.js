@@ -8,6 +8,8 @@ process.on('warning', (warning) => {
   console.warn(warning.name, warning.message);
 });
 
+console.log('STARTING TANABE-GPT...');
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { config } = require('./dependencies');
@@ -207,6 +209,15 @@ function isQuietTimeForGroup(groupName, time) {
 // Initialize bot components
 async function initializeBot() {
     try {
+        // Clear cache if enabled
+        if (config.SYSTEM.ENABLE_STARTUP_CACHE_CLEARING) {
+            const { performCacheClearing } = require('./cacheManagement');
+            const { clearedFiles } = await performCacheClearing();
+            if (clearedFiles > 0) {
+                logger.info(`Cache cleared successfully: ${clearedFiles} files removed`);
+            }
+        }
+
         // Initialize WhatsApp client
         const client = new Client({
             authStrategy: new LocalAuth(),
