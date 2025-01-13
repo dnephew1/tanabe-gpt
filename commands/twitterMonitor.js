@@ -1,5 +1,7 @@
-const { config, runCompletion, axios } = require('./dependencies');
-const logger = require('./logger');
+const config = require('../config');
+const { runCompletion } = require('../utils/openaiUtils');
+const axios = require('axios');
+const logger = require('../utils/logger');
 
 function formatError(error) {
     const location = error.stack?.split('\n')[1]?.trim()?.split('at ')[1] || 'unknown location';
@@ -20,6 +22,11 @@ async function checkTwitterAPIUsage() {
         
         if (response.data && response.data.data) {
             const usage = response.data.data;
+            logger.debug('Twitter API usage response:', {
+                project_cap: usage.project_cap,
+                project_usage: usage.project_usage,
+                remaining: usage.project_cap - usage.project_usage
+            });
             return {
                 remaining: usage.project_cap - usage.project_usage,
                 total: usage.project_cap
@@ -74,7 +81,7 @@ async function initializeTwitterMonitor() {
         // Check API usage before starting
         try {
             const usage = await checkTwitterAPIUsage();
-            logger.info(`Twitter monitor initialized (API Usage: ${usage.remaining}/${usage.total} requests remaining)`);
+            logger.info(`Twitter monitor initialized (API Usage: ${usage.total - usage.remaining}/${usage.total} requests remaining)`);
         } catch (error) {
             logger.warn('Twitter monitor initialized with unknown API usage status');
         }

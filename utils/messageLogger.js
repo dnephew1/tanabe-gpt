@@ -1,37 +1,52 @@
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('./logger');
+const config = require('../config');
 
-let config;
-setTimeout(() => {
-    config = require('./config');
-}, 0);
+let messageHistory = new Map();
 
 async function initializeMessageLog() {
     try {
-        // Initialize message logging for configured groups
-        if (config?.SYSTEM?.MESSAGE_LOGGING?.enabled) {
-            for (const groupName of Object.keys(config.SYSTEM.MESSAGE_LOGGING.groups)) {
-                const messages = await getMessageHistory(groupName);
-                const messageCount = messages.split('\n').length;
-                logger.info(`Message logging initialized for ${groupName} with ${messageCount} messages`);
-            }
+        // Wait for client to be ready
+        if (!global.client._isReady) {
+            logger.debug('Client not ready yet, waiting for initialization...');
+            return;
+        }
+
+        const chats = await global.client.getChats();
+        for (const chat of chats) {
+            const messages = await chat.fetchMessages({ limit: 1 });
+            messageHistory.set(chat.name || chat.id._serialized, messages);
+            logger.debug(`Message logging initialized for ${chat.name || chat.id._serialized} with ${messages.length} messages`);
         }
     } catch (error) {
-        logger.error('Error initializing message log:', error);
+        logger.error('Error in getMessageHistory:', error);
     }
 }
 
 async function getMessageHistory(groupName = null) {
     try {
-        // For admin chat or when groupName is the first logged group, use Leorogeriocosta facebook messages
-        if (!groupName || groupName === config?.CREDENTIALS?.ADMIN_NUMBER + '@c.us') {
-            groupName = "Leorogeriocosta facebook";
-        }
-
         const client = global.client;
         if (!client) {
             logger.error('Client not available for message fetching');
+            return '';
+        }
+
+        // For admin chat, use any group they have access to
+        if (!groupName || groupName === config?.CREDENTIALS?.ADMIN_NUMBER + '@c.us') {
+            const allowedGroups = config?.COMMANDS?.CHAT_GPT?.permissions?.allowedIn || [];
+            if (allowedGroups.length > 0) {
+                groupName = allowedGroups[0];
+            } else {
+                logger.warn('No groups configured for ChatGPT access');
+                return '';
+            }
+        }
+
+        // Verify the group has access to ChatGPT
+        const allowedGroups = config?.COMMANDS?.CHAT_GPT?.permissions?.allowedIn || [];
+        if (!allowedGroups.includes(groupName)) {
+            logger.warn(`Group ${groupName} is not allowed to use ChatGPT`);
             return '';
         }
 

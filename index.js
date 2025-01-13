@@ -8,210 +8,199 @@ process.on('warning', (warning) => {
   console.warn(warning.name, warning.message);
 });
 
-console.log('STARTING TANABE-GPT...');
-
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { config } = require('./dependencies');
-const setupListeners = require('./listener');
-const { runPeriodicSummary } = require('./periodicSummary');
-const { initializeMessageLog } = require('./messageLogger');
-const { initializeTwitterMonitor } = require('./twitterMonitor');
-const { processCommand } = require('./commandHandler');
-const logger = require('./logger');
+const config = require('./config');
+const { setupListeners } = require('./core/listener');
+const { runPeriodicSummary } = require('./commands/periodicSummary');
+const { initializeMessageLog } = require('./utils/messageLogger');
+const { initializeTwitterMonitor } = require('./commands/twitterMonitor');
+const commandManager = require('./core/CommandManager');
+const logger = require('./utils/logger');
 
-let cacheManagement;
-if (config.ENABLE_STARTUP_CACHE_CLEARING) {
-    cacheManagement = require('./cacheManagement');
-}
+// Add global error handlers
+process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
+});
 
 // Initialize global client
 global.client = null;
 
-// Create a new WhatsApp client instance with optimized settings
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ],
-    }
-});
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 5000; // 5 seconds
 
-// Assign the client to global.client after creation
-global.client = client;
-
-// Helper function to check if a time is between two times
-function isTimeBetween(time, start, end) {
-    // Convert times to comparable format (minutes since midnight)
-    const getMinutes = (timeStr) => {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        return hours * 60 + minutes;
-    };
-
-    const timeMinutes = getMinutes(time);
-    const startMinutes = getMinutes(start);
-    const endMinutes = getMinutes(end);
-
-    // Handle cases where quiet time spans across midnight
-    if (startMinutes > endMinutes) {
-        return timeMinutes >= startMinutes || timeMinutes <= endMinutes;
-    }
-    return timeMinutes >= startMinutes && timeMinutes <= endMinutes;
-}
-
-// Helper function to check if it's quiet time for any enabled group
-function isQuietTimeForAnyGroup() {
-    if (!config.PERIODIC_SUMMARY?.enabled) return false;
-
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTime = currentHour * 100 + currentMinute;
-
-    for (const groupConfig of Object.values(config.PERIODIC_SUMMARY.groups)) {
-        if (!groupConfig.enabled || !groupConfig.quietTime) continue;
-
-        const [startHour, startMinute] = groupConfig.quietTime.start.split(':').map(Number);
-        const [endHour, endMinute] = groupConfig.quietTime.end.split(':').map(Number);
-        const startTime = startHour * 100 + startMinute;
-        const endTime = endHour * 100 + endMinute;
-
-        // Handle cases where quiet time spans across midnight
-        if (startTime > endTime) {
-            if (currentTime >= startTime || currentTime <= endTime) {
-                return true;
-            }
-        } else if (currentTime >= startTime && currentTime <= endTime) {
-            return true;
+async function reconnectClient() {
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        logger.warn(`Attempting to reconnect (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+        try {
+            reconnectAttempts++;
+            await initializeBot();
+        } catch (error) {
+            logger.error('Reconnection attempt failed:', error);
+            // Wait before trying again
+            setTimeout(reconnectClient, RECONNECT_DELAY);
         }
-    }
-    return false;
-}
-
-// Get the shortest interval from all enabled groups
-function getShortestInterval() {
-    if (!config.PERIODIC_SUMMARY?.enabled) return null;
-
-    let shortestInterval = Infinity;
-    for (const groupConfig of Object.values(config.PERIODIC_SUMMARY.groups)) {
-        if (groupConfig.enabled && groupConfig.intervalHours) {
-            shortestInterval = Math.min(shortestInterval, groupConfig.intervalHours);
-        }
-    }
-    return shortestInterval === Infinity ? null : shortestInterval;
-}
-
-function scheduleNextSummary() {
-    try {
-        if (!config.PERIODIC_SUMMARY?.enabled) {
-            logger.info('Periodic summaries are disabled');
-            return;
-        }
-
-        const nextSummaryInfo = getNextSummaryInfo();
-        if (!nextSummaryInfo) {
-            logger.info('No groups configured for periodic summaries');
-            return;
-        }
-
-        const { group, interval, nextValidTime } = nextSummaryInfo;
-        const intervalMs = interval * 60 * 60 * 1000;
-
-        // Schedule next run
-        setTimeout(() => {
-            runPeriodicSummary().then(summaryResult => {
-                const { success, reason, nextGroup, nextTime } = summaryResult;
-                const statusMessage = success 
-                    ? `Summary sent for ${group}`
-                    : `Summary not sent for ${group}: ${reason}`;
-                
-                const nextSummaryMessage = `Next summary: ${nextGroup} at ${nextTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
-                
-                // Log summary status and next summary info
-                logger.summary(`${statusMessage}. ${nextSummaryMessage}`);
-            }).catch(error => {
-                logger.error('Failed to run periodic summary', error);
-            });
-            
-            // Schedule next run regardless
-            scheduleNextSummary();
-        }, intervalMs);
-
-        // Log next run time with group info
-        const summaryTimeMessage = isQuietTimeForGroup(group, nextValidTime)
-            ? `Summary for ${group} scheduled for ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT) - Note: This is during quiet hours`
-            : `Next summary: ${group} at ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (BRT)`;
-            
-        logger.summary(summaryTimeMessage);
-    } catch (error) {
-        logger.error('Error scheduling next summary', error);
-        // Try to reschedule in 5 minutes if there's an error
-        setTimeout(scheduleNextSummary, 5 * 60 * 1000);
+    } else {
+        logger.error(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts. Shutting down...`);
+        process.exit(1);
     }
 }
 
 function getNextSummaryInfo() {
-    const groups = Object.entries(config.PERIODIC_SUMMARY.groups)
-        .filter(([_, config]) => config.enabled);
+    // If PERIODIC_SUMMARY exists and is explicitly disabled, return null
+    if (config.PERIODIC_SUMMARY?.enabled === false) {
+        return null;
+    }
+
+    // Get groups and apply defaults
+    const groups = Object.entries(config.PERIODIC_SUMMARY?.groups || {})
+        .map(([groupName, groupConfig]) => {
+            // Use defaults for any missing settings
+            const defaults = config.PERIODIC_SUMMARY?.defaults || {};
+            const groupSettings = {
+                name: groupName,
+                config: {
+                    enabled: groupConfig?.enabled !== false, // enabled by default unless explicitly false
+                    intervalHours: groupConfig?.intervalHours || defaults.intervalHours,
+                    quietTime: groupConfig?.quietTime || defaults.quietTime,
+                    promptPath: groupConfig?.promptPath || defaults.promptPath
+                }
+            };
+            return groupSettings;
+        })
+        .filter(group => group.config.enabled);
     
-    if (groups.length === 0) return null;
+    if (groups.length === 0) {
+        return null;
+    }
 
     let nextSummaryTime = Infinity;
     let selectedGroup = null;
     let selectedInterval = null;
 
-    for (const [group, groupConfig] of groups) {
-        const interval = groupConfig.intervalHours || config.PERIODIC_SUMMARY.defaults.intervalHours;
-        const now = new Date();
-        let nextTime = new Date(now.getTime() + interval * 60 * 60 * 1000);
+    const now = new Date();
+    
+    // Helper function to check if a time is between two times
+    function isTimeBetween(time, start, end) {
+        // Convert times to comparable format (minutes since midnight)
+        const getMinutes = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        };
+
+        const timeMinutes = getMinutes(time);
+        const startMinutes = getMinutes(start);
+        const endMinutes = getMinutes(end);
+
+        // Handle cases where quiet time spans across midnight
+        if (startMinutes > endMinutes) {
+            return timeMinutes >= startMinutes || timeMinutes <= endMinutes;
+        }
+        return timeMinutes >= startMinutes && timeMinutes <= endMinutes;
+    }
+
+    // Helper function to check if a time is during quiet hours for a group
+    function isQuietTimeForGroup(groupName, time) {
+        const groupConfig = config.PERIODIC_SUMMARY.groups[groupName];
+        const defaults = config.PERIODIC_SUMMARY.defaults || {};
+        const quietTime = groupConfig?.quietTime || defaults.quietTime;
         
-        // If it's during quiet hours, find the next valid time
-        while (isQuietTimeForGroup(group, nextTime)) {
-            nextTime = new Date(nextTime.getTime() + interval * 60 * 60 * 1000);
+        if (!quietTime?.start || !quietTime?.end) {
+            return false;
+        }
+
+        const timeStr = time.toLocaleTimeString('pt-BR', { 
+            timeZone: 'America/Sao_Paulo',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        return isTimeBetween(timeStr, quietTime.start, quietTime.end);
+    }
+    
+    for (const group of groups) {
+        // Calculate initial next time
+        let nextTime = new Date(now.getTime() + group.config.intervalHours * 60 * 60 * 1000);
+        
+        // If current time is in quiet hours, adjust the next time
+        while (isQuietTimeForGroup(group.name, nextTime)) {
+            nextTime = new Date(nextTime.getTime() + 60 * 60 * 1000); // Add 1 hour and check again
         }
 
         if (nextTime.getTime() < nextSummaryTime) {
             nextSummaryTime = nextTime.getTime();
-            selectedGroup = group;
-            selectedInterval = interval;
+            selectedGroup = group.name;
+            selectedInterval = group.config.intervalHours;
         }
     }
 
-    return selectedGroup ? {
+    if (!selectedGroup) {
+        return null;
+    }
+
+    const nextTime = new Date(nextSummaryTime);
+    return {
         group: selectedGroup,
         interval: selectedInterval,
-        nextValidTime: new Date(nextSummaryTime)
-    } : null;
+        nextValidTime: nextTime
+    };
 }
 
-function isQuietTimeForGroup(groupName, time) {
-    const groupConfig = config.PERIODIC_SUMMARY.groups[groupName];
-    const quietTime = groupConfig?.quietTime || config.PERIODIC_SUMMARY.defaults.quietTime;
-    
-    const timeStr = time.toLocaleTimeString('pt-BR', { 
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        minute: '2-digit'
+async function scheduleNextSummary() {
+    logger.debug('Checking periodic summary configuration:', {
+        enabled: config.PERIODIC_SUMMARY?.enabled,
+        groups: Object.keys(config.PERIODIC_SUMMARY?.groups || {})
     });
     
-    return isTimeBetween(timeStr, quietTime.start, quietTime.end);
+    const nextSummaryInfo = getNextSummaryInfo();
+    if (!nextSummaryInfo) {
+        // Try again in 1 hour if we couldn't schedule now
+        setTimeout(scheduleNextSummary, 60 * 60 * 1000);
+        return;
+    }
+
+    const { group, interval, nextValidTime } = nextSummaryInfo;
+    const now = new Date();
+    const delayMs = nextValidTime.getTime() - now.getTime();
+
+    // Log summary schedule without sending to chat
+    logger.debug(`Next summary scheduled for ${group} at ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (interval: ${interval}h)`);
+
+    // Schedule the next summary
+    setTimeout(async () => {
+        try {
+            logger.summary(`Running scheduled summary for group ${group}`);
+            const result = await runPeriodicSummary(group);
+            if (result) {
+                logger.summary(`Successfully completed summary for group ${group}`);
+            } else {
+                logger.warn(`Summary for group ${group} completed but may have had issues`);
+            }
+        } catch (error) {
+            logger.error(`Error running periodic summary for group ${group}:`, error);
+        } finally {
+            // Schedule the next summary regardless of whether this one succeeded
+            scheduleNextSummary();
+        }
+    }, delayMs);
 }
 
 // Initialize bot components
 async function initializeBot() {
     try {
+        logger.info('Starting bot initialization...');
+
         // Clear cache if enabled
-        if (config.SYSTEM.ENABLE_STARTUP_CACHE_CLEARING) {
-            const { performCacheClearing } = require('./cacheManagement');
+        if (config.SYSTEM?.ENABLE_STARTUP_CACHE_CLEARING) {
+            logger.debug('Cache clearing is enabled, performing cleanup...');
+            const { performCacheClearing } = require('./commands/cacheManagement');
             const { clearedFiles } = await performCacheClearing();
             if (clearedFiles > 0) {
                 logger.info(`Cache cleared successfully: ${clearedFiles} files removed`);
@@ -219,108 +208,117 @@ async function initializeBot() {
         }
 
         // Initialize WhatsApp client
+        logger.debug('Creating WhatsApp client instance...');
         const client = new Client({
             authStrategy: new LocalAuth(),
             puppeteer: {
-                args: ['--no-sandbox']
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu'
+                ],
             }
         });
 
-        // Set up error handling
-        client.on('auth_failure', () => {
-            logger.error('Authentication failed');
+        // Set up detailed event logging
+        client.on('auth_failure', (msg) => {
+            logger.error('Authentication failed:', msg);
             process.exit(1);
         });
 
-        client.on('disconnected', (reason) => {
-            logger.error('Client was disconnected', reason);
-            process.exit(1);
+        client.on('disconnected', async (reason) => {
+            logger.error('Client was disconnected:', reason);
+            await reconnectClient();
         });
 
-        // Initialize the client
-        await client.initialize();
+        client.on('ready', async () => {
+            logger.debug('WhatsApp client is ready and authenticated!');
+            reconnectAttempts = 0;
+
+            // Initialize components after client is ready
+            try {
+                // Set up message logging
+                logger.debug('Initializing message logging...');
+                await initializeMessageLog();
+
+                // Initialize Twitter monitor if configured
+                if (config.TWITTER_MONITOR?.enabled) {
+                    logger.debug('Initializing Twitter monitor...');
+                    await initializeTwitterMonitor();
+                }
+
+                // Schedule periodic summaries if enabled
+                if (config.PERIODIC_SUMMARY?.enabled) {
+                    logger.debug('Scheduling periodic summaries...');
+                    await scheduleNextSummary();
+                }
+
+                // Notify admin
+                const adminChat = await client.getChatById(`${config.CREDENTIALS.ADMIN_NUMBER}@c.us`);
+                if (adminChat) {
+                    await adminChat.sendMessage('🤖 Bot is now online and ready!');
+                    logger.debug('Admin notified of bot startup');
+                }
+
+                logger.info('Bot initialization completed successfully!');
+            } catch (error) {
+                logger.error('Error initializing components after client ready:', error);
+            }
+        });
+
+        client.on('qr', (qr) => {
+            logger.info('QR Code received, scan to authenticate:');
+            qrcode.generate(qr, { small: true });
+        });
+
+        client.on('loading_screen', (percent, message) => {
+            logger.debug('WhatsApp loading screen:', { percent, message });
+        });
+
+        client.on('authenticated', () => {
+            logger.debug('Client authenticated successfully');
+        });
+
+        // Initialize the client with detailed error handling
+        logger.debug('Starting WhatsApp client initialization...');
+        try {
+            await Promise.race([
+                client.initialize(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('WhatsApp client initialization timed out after 60 seconds')), 60000)
+                )
+            ]);
+            logger.debug('WhatsApp client initialized successfully');
+        } catch (error) {
+            logger.error('Failed to initialize WhatsApp client:', error);
+            throw error;
+        }
 
         // Store client globally for admin notifications
+        logger.debug('Storing client globally...');
         global.client = client;
 
-        await new Promise((resolve, reject) => {
-            let isInitialized = false;
+        // Set up event listeners
+        logger.debug('Setting up event listeners...');
+        setupListeners(client);
 
-            client.on('ready', async () => {
-                isInitialized = true;
+        return true;
 
-                try {
-                    // Process any pending admin notifications
-                    if (global.pendingAdminNotifications?.length > 0) {
-                        logger.info('Processing pending admin notifications...');
-                        for (const message of global.pendingAdminNotifications) {
-                            await logger.notifyAdmin(message);
-                        }
-                        global.pendingAdminNotifications = [];
-                    }
-
-                    // Initialize components only after client is ready
-                    await initializeMessageLog(client);
-                    
-                    // Set up all message listeners
-                    await setupListeners(client);
-                    
-                    if (config.PERIODIC_SUMMARY?.enabled) {
-                        scheduleNextSummary();
-                    }
-
-                    if (config.TWITTER?.enabled) {
-                        await initializeTwitterMonitor(client);
-                    }
-
-                    const startupMessage = `Bot is now online and ready`;
-                    await logger.startup(startupMessage);
-
-                    resolve();
-                } catch (error) {
-                    reject(error);
-                }
-            });
-
-            // Set a timeout for initialization
-            setTimeout(() => {
-                if (!isInitialized) {
-                    reject(new Error('Client initialization timed out'));
-                }
-            }, 30000);
-        });
     } catch (error) {
-        logger.error('Failed to initialize bot', error);
-        process.exit(1);
+        logger.error('Error during bot initialization:', error);
+        throw error;
     }
 }
 
-// Reconnect on disconnection
-let reconnectAttempts = 0;
-
-async function reconnectClient() {
-    if (reconnectAttempts < config.MAX_RECONNECT_ATTEMPTS) {
-        logger.info(`Attempting to reconnect (attempt ${reconnectAttempts + 1}/${config.MAX_RECONNECT_ATTEMPTS})`);
-        client.initialize();
-        reconnectAttempts++;
-    } else {
-        logger.shutdown(`Failed to reconnect after ${config.MAX_RECONNECT_ATTEMPTS} attempts. Shutting down...`);
-        process.exit(1);
-    }
-}
-
-// Error handling for unhandled promises
-process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Promise Rejection', reason);
-});
-
-process.on('uncaughtException', (error) => {
-    logger.error('Uncaught Exception', error);
-    process.exit(1);
-});
-
-// Start initialization
+// Start the bot
 initializeBot().catch(error => {
-    logger.error('Failed to initialize bot', error);
+    logger.error('Failed to initialize bot:', error);
     process.exit(1);
 });
+

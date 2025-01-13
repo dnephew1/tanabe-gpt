@@ -1,7 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { config } = require('./dependencies');
-const logger = require('./logger');
+const config = require('../config');
+const logger = require('../utils/logger');
 
 // Cache directories to clear
 const CACHE_DIRS = [
@@ -15,7 +15,7 @@ async function performCacheClearing() {
     let clearedFiles = 0;
 
     for (const dir of CACHE_DIRS) {
-        const dirPath = path.join(__dirname, dir);
+        const dirPath = path.join(__dirname, '..', dir);
         try {
             const files = await fs.readdir(dirPath);
             for (const file of files) {
@@ -46,4 +46,4 @@ async function performCacheClearing() {
 
 module.exports = {
     performCacheClearing
-};
+}; 
