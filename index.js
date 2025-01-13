@@ -171,7 +171,7 @@ async function scheduleNextSummary() {
     const delayMs = nextValidTime.getTime() - now.getTime();
 
     // Log summary schedule without sending to chat
-    logger.debug(`Next summary scheduled for ${group} at ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (interval: ${interval}h)`);
+    logger.summary(`Next summary scheduled for ${group} at ${nextValidTime.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (interval: ${interval}h)`);
 
     // Schedule the next summary
     setTimeout(async () => {
