@@ -247,16 +247,16 @@ async function initializeBot() {
                 logger.debug('Initializing message logging...');
                 await initializeMessageLog();
 
-                // Initialize Twitter monitor if configured
-                if (config.TWITTER_MONITOR?.enabled) {
-                    logger.debug('Initializing Twitter monitor...');
-                    await initializeTwitterMonitor();
-                }
-
                 // Schedule periodic summaries if enabled
                 if (config.PERIODIC_SUMMARY?.enabled) {
                     logger.debug('Scheduling periodic summaries...');
                     await scheduleNextSummary();
+                }
+
+                // Initialize Twitter monitor if configured
+                if (config.TWITTER_MONITOR?.enabled) {
+                    logger.debug('Initializing Twitter monitor...');
+                    await initializeTwitterMonitor();
                 }
 
                 // Notify admin
