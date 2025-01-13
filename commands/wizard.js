@@ -1,6 +1,5 @@
 const { Client } = require('whatsapp-web.js');
 const config = require('../config');
-const { handleAutoDelete } = require('../utils/messageUtils');
 const { runCompletion } = require('../utils/openaiUtils');
 const { saveConfig } = require('../utils/configUtils');
 const logger = require('../utils/logger');
@@ -97,7 +96,7 @@ function formatGroupConfig(groupName, groupConfig) {
 
     return `*Configuração atual do grupo "${groupName}":*
 
-1️⃣ Ativado: ${groupConfig.enabled ? '✅' : '❌'}
+1️⃣ Ativado: ${groupConfig.enabled === false ? '❌' : '✅'}
 2️⃣ Intervalo: ${formatInterval(groupConfig.intervalHours)}
 3️⃣ Horário silencioso: ${formatQuietTime(groupConfig.quietTime)}
 4️⃣ Exclusão automática: ${formatDeleteAfter(groupConfig.deleteAfter)}
@@ -213,11 +212,11 @@ async function handleWizard(message) {
                 
                 if (groups.length > 0) {
                     groups.forEach(({ name, config: groupConfig, index }) => {
-                        response += `${index}. ${name} ${groupConfig.enabled !== false ? '✅' : '❌'}\n`;
+                        response += `${index}. ${name} ${groupConfig.enabled === false ? '❌' : '✅'}\n`;
                     });
-                    response += '\nDigite o número do grupo para editar ou digite o nome *exato* de um novo grupo para criar (respeitando maiúsculas/minúsculas).\nDigite "cancelar" para sair.';
+                    response += '\nDigite o número do grupo para editar ou digite o nome *exato* de um novo grupo para criar (respeitando maiúsculas/minúsculas).\n\nDigite "cancelar" para sair.';
                 } else {
-                    response += 'Nenhum grupo configurado.\n\nDigite o nome *exato* do grupo que deseja configurar (respeitando maiúsculas/minúsculas).\nDigite "cancelar" para sair.';
+                    response += 'Nenhum grupo configurado.\n\nDigite o nome *exato* do grupo que deseja configurar (respeitando maiúsculas/minúsculas).\n\nDigite "cancelar" para sair.';
                 }
                 
                 await message.reply(response);

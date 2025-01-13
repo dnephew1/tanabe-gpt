@@ -6,6 +6,7 @@ const commandManager = require('./CommandManager');
 const { registerCommands } = require('./CommandRegistry');
 const { handleAyubLinkSummary } = require('../commands/ayub');
 const { initializeTwitterMonitor } = require('../commands/twitterMonitor');
+const { getUserState, handleWizard } = require('../commands/wizard');
 
 let startupTime = null;
 
@@ -64,6 +65,13 @@ function setupListeners(client) {
                 const isCommand = await commandManager.processCommand(message);
                 if (isCommand) {
                     await chat.sendStateTyping();
+                } else {
+                    // Check for active wizard session
+                    const userState = getUserState(message.author || message.from);
+                    if (userState && userState.state !== 'INITIAL') {
+                        await chat.sendStateTyping();
+                        await handleWizard(message);
+                    }
                 }
 
             } catch (error) {
