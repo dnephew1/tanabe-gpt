@@ -19,13 +19,11 @@ FIM DAS MENSAGENS.
 
 {groupPersonality}
         `,
-    LINK_SUMMARY: `
-Por favor, faça um resumo do seguinte conteúdo:
+    LINK_SUMMARY: `Você é um assistente especializado em resumir conteúdo. Por favor, resuma o seguinte texto em português de forma clara e concisa, mantendo os pontos principais:
 
 {pageContent}
 
-{groupPersonality}
-        `,
+Forneça um resumo que capture a essência do conteúdo.`,
     QUOTED_MESSAGE: `
 {name} está pedindo para que você resuma a seguinte mensagem:
 

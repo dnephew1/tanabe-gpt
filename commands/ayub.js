@@ -4,39 +4,39 @@ const { handleAutoDelete } = require('../utils/messageUtils');
 const { runCompletion } = require('../utils/openaiUtils');
 const { extractLinks, unshortenLink, getPageContent } = require('../utils/linkUtils');
 const { scrapeNews, searchNews, translateToPortuguese } = require('../utils/newsUtils');
-
-// Define the link summary prompt template
-const LINK_SUMMARY_PROMPT = `Você é um assistente especializado em resumir conteúdo. Por favor, resuma o seguinte texto em português de forma clara e concisa, mantendo os pontos principais:
-
-{pageContent}
-
-Forneça um resumo que capture a essência do conteúdo.`;
+const RESUMO = require('../prompts/resumo');
 
 async function handleAyubLinkSummary(message) {
     logger.debug('handleAyubLinkSummary activated');
     const chat = await message.getChat();
     const contact = await message.getContact();
     
-    // Check if it's either admin chat or Ayub in the target group
+    // Get admin number from config
     const adminNumber = config.CREDENTIALS.ADMIN_NUMBER;
     const contactNumber = contact.id.user; // This gets just the number without @c.us
-    const isAdminChat = contactNumber === adminNumber || 
-                       contact.id._serialized === `${adminNumber}@c.us`;
-    const isAyubInTargetGroup = chat.name === 'Leorogeriocosta facebook' && contact.name === 'Ayub';
+    
+    // Check conditions:
+    // 1. Admin's links are only summarized in admin DM chat
+    // 2. Ayub's links are only summarized in 'Leorogeriocosta facebook' group
+    const isAdminInDM = contactNumber === adminNumber && 
+                       chat.isGroup === false;
+    const isAyubInTargetGroup = chat.name === 'Leorogeriocosta facebook' && 
+                               contact.name === 'Ayub';
     
     logger.debug('Link summary check', {
-        isAdminChat,
+        isAdminInDM,
         isAyubInTargetGroup,
         chatName: chat.name,
         contactName: contact.name,
         contactId: contact.id._serialized,
         contactNumber,
         adminNumber,
+        isGroup: chat.isGroup,
         messageBody: message.body
     });
 
-    if (!isAdminChat && !isAyubInTargetGroup) {
-        logger.debug('Message not from admin or Ayub in target group, skipping');
+    if (!isAdminInDM && !isAyubInTargetGroup) {
+        logger.debug('Message does not meet criteria for auto-summary, skipping');
         return;
     }
 
@@ -46,7 +46,7 @@ async function handleAyubLinkSummary(message) {
         return;
     }
 
-    logger.info(`Processing link summary for ${isAdminChat ? 'admin' : 'Ayub'}`);
+    logger.info(`Processing link summary for ${isAdminInDM ? 'admin in DM' : 'Ayub in target group'}`);
     const link = links[0];
     try {
         logger.debug(`Unshortening link: ${link}`);
@@ -61,7 +61,7 @@ async function handleAyubLinkSummary(message) {
         }
         
         logger.debug('Generating summary with ChatGPT');
-        const prompt = LINK_SUMMARY_PROMPT.replace('{pageContent}', pageContent);
+        const prompt = RESUMO.LINK_SUMMARY.replace('{pageContent}', pageContent);
         const summary = await runCompletion(prompt, 1);
         
         if (!summary || summary.trim().length === 0) {
