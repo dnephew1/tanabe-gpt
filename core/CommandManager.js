@@ -1,6 +1,7 @@
 const config = require('../config');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
+const nlpProcessor = require('../commands/nlpProcessor');
 
 class CommandManager {
     constructor() {
@@ -15,11 +16,45 @@ class CommandManager {
     }
 
     // Parse command from message
-    parseCommand(messageBody) {
+    async parseCommand(messageBody, mentions = []) {
         if (!messageBody) return { command: null, input: '' };
 
         const trimmedBody = messageBody.trim();
         
+        // Check if the bot was mentioned
+        if (mentions && mentions.length > 0) {
+            try {
+                const botNumber = config.CREDENTIALS.BOT_NUMBER;
+                const isBotMentioned = mentions.some(id => id === `${botNumber}@c.us`);
+                
+                if (isBotMentioned) {
+                    logger.debug('Bot was mentioned, processing with NLP');
+                    const nlpResult = await nlpProcessor.processNaturalLanguage({ 
+                        body: trimmedBody,
+                        hasQuotedMsg: false,
+                        mentionedIds: mentions,
+                        getChat: async () => ({ isGroup: true }),
+                        getContact: async () => ({ id: { _serialized: 'unknown' } })
+                    });
+                    
+                    if (nlpResult && nlpResult.startsWith('#')) {
+                        const processedCommand = nlpResult.slice(1).trim();
+                        const [commandName, ...inputParts] = processedCommand.split(' ');
+                        const command = config.COMMANDS[commandName.toUpperCase()];
+                        
+                        if (command) {
+                            return {
+                                command: { ...command, name: commandName.toUpperCase() },
+                                input: inputParts.join(' ')
+                            };
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error('Error processing NLP command:', error);
+            }
+        }
+
         // Check each command's prefixes
         for (const [commandName, command] of Object.entries(config.COMMANDS)) {
             if (!command.prefixes || !Array.isArray(command.prefixes)) continue;
@@ -33,6 +68,10 @@ class CommandManager {
                 // Then check for prefix with additional content
                 if (trimmedBody.toLowerCase().startsWith(prefix.toLowerCase() + ' ')) {
                     const input = trimmedBody.slice(prefix.length).trim();
+                    logger.debug('Command parsed with input', {
+                        command: commandName,
+                        input: input
+                    });
                     return { command: { ...command, name: commandName }, input };
                 }
             }
@@ -82,12 +121,11 @@ class CommandManager {
             command: command.name,
             chatId,
             permissions: command.permissions,
-            isAdmin: chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us` || chatId === config.CREDENTIALS.ADMIN_NUMBER
+            isAdmin: chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`
         });
 
         // Admin always has access to all commands
-        if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us` || 
-            chatId === config.CREDENTIALS.ADMIN_NUMBER) {
+        if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`) {
             logger.debug('Admin access granted');
             return true;
         }
@@ -104,9 +142,21 @@ class CommandManager {
         
         // Check specific permissions
         if (Array.isArray(command.permissions.allowedIn)) {
-            const isAllowed = command.permissions.allowedIn.includes(chatId);
+            // Get chat name for group chats
+            let chatName = chatId;
+            if (chatId.endsWith('@g.us')) {
+                try {
+                    const chat = await global.client.getChatById(chatId);
+                    chatName = chat.name;
+                } catch (error) {
+                    logger.error('Error getting chat name:', error);
+                }
+            }
+
+            const isAllowed = command.permissions.allowedIn.includes(chatName);
             logger.debug('Checking specific permissions', {
                 allowedChats: command.permissions.allowedIn,
+                chatName,
                 isAllowed
             });
             return isAllowed;
@@ -157,108 +207,63 @@ class CommandManager {
 
     // Main command processing function
     async processCommand(message) {
-        const contact = await message.getContact();
-        const userId = contact.id._serialized;
-        const chat = await message.getChat();
-        const chatId = chat.isGroup ? chat.name : message.from;
-
-        let command = null;
-        let input = '';
-
-        // Check for tag commands first
-        if (message.body.trim().startsWith('@')) {
-            const tagCommand = config.COMMANDS.TAG;
-            if (tagCommand) {
-                command = { ...tagCommand, name: 'TAG' };
-            }
-        }
-
-        // If no tag command found, check for sticker-based commands
-        if (!command && message.hasMedia && message.type === 'sticker') {
-            try {
-                const media = await message.downloadMedia();
-                if (media && media.data) {
-                    // Calculate SHA-256 hash of the sticker data
-                    const stickerHash = crypto.createHash('sha256')
-                        .update(media.data)
-                        .digest('hex');
-                    
-                    logger.debug('Checking sticker hash', { stickerHash });
-
-                    // Find command with matching sticker hash
-                    for (const [cmdName, cmdConfig] of Object.entries(config.COMMANDS)) {
-                        if (cmdConfig.stickerHash === stickerHash) {
-                            command = { ...cmdConfig, name: cmdName };
-                            break;
-                        }
-                    }
-                }
-            } catch (error) {
-                logger.error('Error processing sticker:', error);
-            }
-        }
-        
-        // Check for audio commands
-        if (!command && message.hasMedia && ['audio', 'ptt'].includes(message.type)) {
-            logger.debug('Processing audio message', {
-                type: message.type,
-                hasMedia: message.hasMedia
-            });
+        try {
+            // Parse the command from the message
+            const mentions = message.mentionedIds || [];
+            const { command, input } = await this.parseCommand(message.body, mentions);
             
-            // Find audio command configuration
-            const audioCommand = config.COMMANDS.AUDIO;
-            if (audioCommand) {
-                command = { ...audioCommand, name: 'AUDIO' };
-            }
-        }
+            if (!command) return false;
 
-        // If no media command found, try text-based command
-        if (!command) {
-            const parsed = this.parseCommand(message.body);
-            command = parsed.command;
-            input = parsed.input;
-        }
-
-        // Process the command if found
-        if (command) {
             logger.debug('Processing command', {
                 command: command.name,
-                user: message.author || 'Unknown',
-                chat: chat.name || 'DM',
-                chatId,
-                permissions: command.permissions
+                input,
+                chatId: message.chat?.id?._serialized,
+                hasQuoted: message.hasQuotedMsg,
+                hasMedia: message.hasMedia
             });
-            
-            // Check permissions
-            if (!await this.isCommandAllowedInChat(command, chatId)) {
-                logger.warn(`Command ${command.name} not allowed in chat ${chatId}`);
-                const errorMessage = await message.reply(command.errorMessages.notAllowed);
-                await this.handleAutoDelete(errorMessage, command, true);
-                return true;
+
+            // Validate the command
+            if (!this.validateCommand(command.name, command)) {
+                logger.warn(`Invalid command configuration for ${command.name}`);
+                return false;
             }
 
-            // Log successful command after permission check
-            logger.info(`${command.name} by ${message.author || 'Unknown'} in ${chat.name || 'DM'}`);
+            // Get chat ID and name
+            const chat = await message.getChat();
+            const chatId = chat.id._serialized;
+
+            // Check if command is allowed in this chat
+            const isAllowed = await this.isCommandAllowedInChat(command, chatId);
+            if (!isAllowed) {
+                logger.warn(`Command ${command.name} not allowed in chat ${chatId}`);
+                if (command.errorMessages?.notAllowed) {
+                    await message.reply(command.errorMessages.notAllowed);
+                }
+                return false;
+            }
+
+            // Get the handler for this command
+            const handler = this.commandHandlers.get(command.name);
+            if (!handler) {
+                logger.warn(`No handler registered for command ${command.name}`);
+                return false;
+            }
 
             try {
-                await chat.sendStateTyping();
-                const handler = this.commandHandlers.get(command.name);
-                if (handler) {
-                    await handler(message, command, input);
-                } else {
-                    logger.error(`No handler found for command: ${command.name}`);
-                }
+                // Execute the command
+                await handler(message, command, input);
+                return true;
             } catch (error) {
-                logger.error(`Error handling command ${command.name}:`, error);
+                logger.error(`Error executing command ${command.name}:`, error);
                 if (command.errorMessages?.error) {
-                    const errorMessage = await message.reply(command.errorMessages.error);
-                    await this.handleAutoDelete(errorMessage, command, true);
+                    await message.reply(command.errorMessages.error);
                 }
+                return false;
             }
-            return true;
+        } catch (error) {
+            logger.error('Error processing command:', error);
+            return false;
         }
-
-        return false;
     }
 }
 

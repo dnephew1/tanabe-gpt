@@ -117,19 +117,65 @@ async function handleSpecificMessageCount(message, limit) {
             .catch(error => console.error('Failed to send message:', error.message));
     }
 
-    // Fetch messages with the specified limit
-    const messages = await chat.fetchMessages({ limit: limit });
-    
-    // Filter out bot's own messages and empty messages, but keep the specified count
-    const messagesWithoutMe = messages.filter(msg => !msg.fromMe && msg.body.trim() !== '');
+    let allValidMessages = [];
+    let lastMessageId = null;
+    const batchSize = Math.min(limit * 2, 100); // Fetch in smaller batches to avoid memory issues
 
-    if (messagesWithoutMe.length === 0) {
+    // Keep fetching until we have enough valid messages
+    while (allValidMessages.length < limit) {
+        logger.debug('Fetching messages batch', {
+            currentValidCount: allValidMessages.length,
+            targetCount: limit,
+            batchSize,
+            hasLastMessageId: !!lastMessageId
+        });
+
+        // Fetch next batch of messages
+        const options = { limit: batchSize };
+        if (lastMessageId) {
+            options.before = lastMessageId;
+        }
+        const messages = await chat.fetchMessages(options);
+
+        // If no more messages available, break
+        if (!messages || messages.length === 0) {
+            break;
+        }
+
+        // Filter valid messages from this batch
+        const validMessagesInBatch = messages.filter(msg => 
+            !msg.fromMe && 
+            msg.body.trim() !== '' &&
+            !msg._data.isDeleted // Skip deleted messages
+        );
+
+        // Add valid messages to our collection
+        allValidMessages = allValidMessages.concat(validMessagesInBatch);
+
+        // Update lastMessageId for next iteration
+        lastMessageId = messages[messages.length - 1].id._serialized;
+
+        // If we've fetched all available messages and still don't have enough, break
+        if (messages.length < batchSize) {
+            break;
+        }
+    }
+
+    // Take exactly the number of messages requested or all available if less
+    const messagesToSummarize = allValidMessages.slice(0, limit);
+
+    if (messagesToSummarize.length === 0) {
         return await message.reply('Não há mensagens suficientes para gerar um resumo')
             .catch(error => console.error('Failed to send message:', error.message));
     }
 
-    // Take only the specified number of messages or all available if less than limit
-    const messagesToSummarize = messagesWithoutMe.slice(0, limit);
+    // Log if we couldn't get enough messages
+    if (messagesToSummarize.length < limit) {
+        logger.debug('Could not find enough valid messages', {
+            requested: limit,
+            found: messagesToSummarize.length
+        });
+    }
 
     const messageTexts = await Promise.all(messagesToSummarize.map(async msg => {
         const contact = await msg.getContact();
@@ -164,15 +210,21 @@ async function handleResumo(message, command, input) {
             return await handleQuotedMessage(message, command);
         }
 
-        // If there's a number after #resumo, handle specific message count
-        if (input && input.trim()) {
-            const limit = parseInt(input.trim());
-            if (isNaN(limit)) {
-                const errorMessage = await message.reply(command.errorMessages.invalidFormat);
-                await handleAutoDelete(errorMessage, command, true);
-                return;
+        // If there's input after #resumo, try to parse it as a number first
+        if (input) {
+            const trimmedInput = input.trim();
+            if (trimmedInput) {
+                const limit = parseInt(trimmedInput);
+                if (!isNaN(limit)) {
+                    logger.debug('Processing specific message count:', limit);
+                    return await handleSpecificMessageCount(message, limit);
+                } else {
+                    logger.debug('Invalid number format:', trimmedInput);
+                    const errorMessage = await message.reply(command.errorMessages.invalidFormat);
+                    await handleAutoDelete(errorMessage, command, true);
+                    return;
+                }
             }
-            return await handleSpecificMessageCount(message, limit);
         }
 
         // Default case: no input and no quoted message - show last 3 hours

@@ -7,6 +7,7 @@ const { registerCommands } = require('./CommandRegistry');
 const { handleAyubLinkSummary } = require('../commands/ayub');
 const { initializeTwitterMonitor } = require('../commands/twitterMonitor');
 const { getUserState, handleWizard } = require('../commands/wizard');
+const nlpProcessor = require('../commands/nlpProcessor');
 
 let startupTime = null;
 
@@ -17,6 +18,7 @@ function setupListeners(client) {
 
         // Set startup time when initializing
         startupTime = Date.now();
+        
         // Set up message event handler
         client.on('message', async (message) => {
             // Skip messages from before bot startup
@@ -32,63 +34,68 @@ function setupListeners(client) {
             try {
                 // Get chat first
                 chat = await message.getChat();
-                logger.debug('Processing message', {
+                const contact = await message.getContact();
+                
+                logger.debug('Message received', {
                     chatName: chat.name,
                     chatId: chat.id._serialized,
                     messageType: message.type,
-                    hasMedia: message.hasMedia
+                    hasMedia: message.hasMedia,
+                    messageBody: message.body,
+                    isGroup: chat.isGroup,
+                    fromMe: message.fromMe,
+                    hasQuoted: message.hasQuotedMsg,
+                    mentions: message.mentionedIds || []
                 });
+
+                // Skip messages from the bot itself
+                if (message.fromMe) {
+                    logger.debug('Skipping message from bot');
+                    return;
+                }
                 
-                // Check for links first
+                // Check for wizard state first
+                const userId = contact.id._serialized;
+                const userState = getUserState(userId);
+                if (userState && userState.state !== 'INITIAL') {
+                    logger.debug('User in wizard mode, handling wizard', { userId, state: userState.state });
+                    await handleWizard(message);
+                    return;
+                }
+
+                // Check for traditional command syntax first (messages starting with #)
+                if (message.body.startsWith('#')) {
+                    logger.debug('Processing traditional command', { command: message.body });
+                    await commandManager.processCommand(message);
+                    return;
+                }
+
+                // Try NLP processing
+                try {
+                    logger.debug('Attempting NLP processing');
+                    const nlpResult = await nlpProcessor.processNaturalLanguage(message);
+                    if (nlpResult) {
+                        logger.debug('NLP produced a command', { nlpResult });
+                        // Create a new message object while preserving the original message's properties and methods
+                        const nlpMessage = Object.create(
+                            Object.getPrototypeOf(message),
+                            Object.getOwnPropertyDescriptors(message)
+                        );
+                        nlpMessage.body = nlpResult;
+                        await commandManager.processCommand(nlpMessage);
+                        return;
+                    } else {
+                        logger.debug('NLP processing skipped or produced no result');
+                    }
+                } catch (error) {
+                    logger.error('Error in NLP processing:', error);
+                }
+                
+                // Check for links last
                 await handleAyubLinkSummary(message);
                 
-                // Handle audio messages next
-                if (message.hasMedia && (message.type === 'audio' || message.type === 'ptt')) {
-                    const command = config.COMMANDS.AUDIO;
-                    if (command) {
-                        try {
-                            await chat.sendStateTyping();
-                            const contact = await message.getContact();
-                            const user = contact.name || contact.pushname || contact.number;
-                            const chatType = chat.isGroup ? chat.name : 'DM';
-                            logger.info(`Audio Transcription by ${user} in ${chatType}`);
-                            await commandManager.processCommand(message);
-                        } catch (error) {
-                            logger.error('Error processing audio command:', error);
-                            await message.reply(command.errorMessages?.error || 'An error occurred while processing the audio.');
-                        }
-                        return;
-                    }
-                }
-
-                // Process other commands
-                const isCommand = await commandManager.processCommand(message);
-                if (isCommand) {
-                    await chat.sendStateTyping();
-                } else {
-                    // Check for active wizard session
-                    const userState = getUserState(message.author || message.from);
-                    if (userState && userState.state !== 'INITIAL') {
-                        await chat.sendStateTyping();
-                        await handleWizard(message);
-                    }
-                }
-
             } catch (error) {
-                logger.error('Error in message handler:', error);
-                try {
-                    await message.reply('An error occurred while processing your message.');
-                } catch (replyError) {
-                    logger.error('Error sending error reply:', replyError);
-                }
-            } finally {
-                if (chat) {
-                    try {
-                        await chat.clearState();
-                    } catch (error) {
-                        logger.error('Error clearing chat state:', error);
-                    }
-                }
+                logger.error('Error processing message:', error);
             }
         });
 
@@ -159,7 +166,10 @@ function setupListeners(client) {
         });
 
         client.on('change_state', state => {
-            logger.info('Client state changed to:', state);
+            logger.debug('Client state changed', {
+                newState: state,
+                timestamp: new Date().toISOString()
+            });
         });
 
         client.on('loading_screen', (percent, message) => {

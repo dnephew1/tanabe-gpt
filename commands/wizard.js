@@ -4,6 +4,7 @@ const { runCompletion } = require('../utils/openaiUtils');
 const { saveConfig } = require('../utils/configUtils');
 const logger = require('../utils/logger');
 const defaultPrompt = require('../prompts/periodic_summary').DEFAULT;
+const nlpProcessor = require('./nlpProcessor');
 
 // Store user states
 const userStates = new Map();
@@ -52,10 +53,20 @@ function setUserState(userId, state, data = {}) {
 }
 
 // Helper function to clear user state
-function clearUserState(userId, showCompletionMessage = false, message = null) {
-    userStates.delete(userId);
-    if (showCompletionMessage && message) {
-        message.reply('✨ Configuração concluída! Lembre-se de adicionar o bot ao grupo para que ele possa começar a fazer os resumos.\n\nPara editar as configurações novamente, use o comando #ferramentaresumo.');
+function clearUserState(userId, success = false, message = null) {
+    // Deactivate wizard mode in NLP processor
+    nlpProcessor.setWizardState(userId, false);
+    
+    // Clear existing state
+    if (userStates.has(userId)) {
+        userStates.delete(userId);
+        logger.debug('Wizard state cleared for user', { userId, success });
+        
+        if (message && success) {
+            message.reply('✅ Configuração concluída com sucesso!');
+        } else if (message) {
+            message.reply('❌ Configuração cancelada.');
+        }
     }
 }
 

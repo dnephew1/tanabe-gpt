@@ -17,6 +17,13 @@ const LOG_FILE = 'tanabe-gpt.log';
 const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
 const BACKUP_LOG_FILE = 'tanabe-gpt.old.log';
 
+// ANSI color codes
+const COLORS = {
+    RED: '\x1b[31m',
+    YELLOW: '\x1b[33m',
+    RESET: '\x1b[0m'
+};
+
 // Function to format error objects
 function formatError(error) {
     if (!error) return 'Unknown error';
@@ -37,7 +44,14 @@ function formatLogWithTimestamp(level, message, error = null) {
         hour12: false
     });
     
-    let logMessage = `[${timestamp}] [${level}] ${message}`;
+    let prefix = `[${timestamp}] [${level}]`;
+    if (level === LOG_LEVELS.ERROR) {
+        prefix = `[${timestamp}] ${COLORS.RED}[${level}]${COLORS.RESET}`;
+    } else if (level === LOG_LEVELS.WARN) {
+        prefix = `[${timestamp}] ${COLORS.YELLOW}[${level}]${COLORS.RESET}`;
+    }
+    
+    let logMessage = `${prefix} ${message}`;
     
     if (error) {
         logMessage += `: ${formatError(error)}`;
