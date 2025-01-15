@@ -20,6 +20,10 @@ class CommandManager {
         if (!messageBody) return { command: null, input: '' };
 
         const trimmedBody = messageBody.trim();
+        logger.debug('Parsing command from message', { 
+            messageBody: trimmedBody,
+            hasMentions: mentions.length > 0 
+        });
         
         // Check if the bot was mentioned
         if (mentions && mentions.length > 0) {
@@ -57,20 +61,35 @@ class CommandManager {
 
         // Check each command's prefixes
         for (const [commandName, command] of Object.entries(config.COMMANDS)) {
-            if (!command.prefixes || !Array.isArray(command.prefixes)) continue;
+            if (!command.prefixes || !Array.isArray(command.prefixes)) {
+                logger.debug('Skipping command without prefixes', { commandName });
+                continue;
+            }
+            
+            logger.debug('Checking command prefixes', { 
+                commandName, 
+                prefixes: command.prefixes,
+                messageBody: trimmedBody
+            });
             
             for (const prefix of command.prefixes) {
-                // Check for exact match first
+                // Check for exact match first (case insensitive)
                 if (trimmedBody.toLowerCase() === prefix.toLowerCase()) {
+                    logger.debug('Found exact command match', {
+                        command: commandName,
+                        prefix,
+                        input: ''
+                    });
                     return { command: { ...command, name: commandName }, input: '' };
                 }
                 
-                // Then check for prefix with additional content
+                // Then check for prefix with additional content (case insensitive)
                 if (trimmedBody.toLowerCase().startsWith(prefix.toLowerCase() + ' ')) {
                     const input = trimmedBody.slice(prefix.length).trim();
-                    logger.debug('Command parsed with input', {
+                    logger.debug('Found command with input', {
                         command: commandName,
-                        input: input
+                        prefix,
+                        input
                     });
                     return { command: { ...command, name: commandName }, input };
                 }
@@ -81,6 +100,9 @@ class CommandManager {
         if (trimmedBody.startsWith('#')) {
             const chatGptCommand = config.COMMANDS.CHAT_GPT;
             if (this.validateCommand('CHAT_GPT', chatGptCommand)) {
+                logger.debug('Treating as ChatGPT command', {
+                    input: trimmedBody.slice(1).trim()
+                });
                 return { 
                     command: { ...chatGptCommand, name: 'CHAT_GPT' }, 
                     input: trimmedBody.slice(1).trim() 
@@ -88,6 +110,7 @@ class CommandManager {
             }
         }
 
+        logger.debug('No command match found', { messageBody: trimmedBody });
         return { command: null, input: '' };
     }
 

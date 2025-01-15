@@ -63,10 +63,16 @@ function setupListeners(client) {
                     return;
                 }
 
-                // Check for traditional command syntax first (messages starting with #)
-                if (message.body.startsWith('#')) {
-                    logger.debug('Processing traditional command', { command: message.body });
-                    await commandManager.processCommand(message);
+                // Check for traditional command syntax first (messages starting with # or !)
+                if (message.body.startsWith('#') || message.body.startsWith('!')) {
+                    logger.debug('Processing traditional command', { 
+                        prefix: message.body[0],
+                        command: message.body 
+                    });
+                    const result = await commandManager.processCommand(message);
+                    if (!result) {
+                        logger.debug('Command processing failed or command not found');
+                    }
                     return;
                 }
 

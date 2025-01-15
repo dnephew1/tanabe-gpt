@@ -73,9 +73,12 @@ class NLPProcessor {
 
     async shouldProcessMessage(message) {
         try {
-            // Skip if message starts with a command prefix (use traditional command processing)
-            if (message.body.startsWith('#')) {
-                logger.debug('Skipping NLP - message uses command prefix', { body: message.body });
+            // Skip if message starts with any command prefix (use traditional command processing)
+            if (message.body.startsWith('#') || message.body.startsWith('!')) {
+                logger.debug('Skipping NLP - message uses command prefix', { 
+                    prefix: message.body[0],
+                    body: message.body 
+                });
                 return false;
             }
 

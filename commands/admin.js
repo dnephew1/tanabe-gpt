@@ -4,6 +4,7 @@ const { performCacheClearing } = require('./cacheManagement');
 const logger = require('../utils/logger');
 const { getNextSummaryInfo, scheduleNextSummary } = require('../utils/periodicSummaryUtils');
 const { runPeriodicSummary } = require('./periodicSummary');
+const axios = require('axios');
 
 // Helper function to check if message is from admin chat
 async function isAdminChat(message) {
@@ -139,11 +140,12 @@ async function handleTwitterDebug(message) {
                 // Evaluate the news using ChatGPT
                 const evaluation = await runCompletion(prompt, 1);
                 
-                debugInfo = `Latest Tweet ID: ${latestTweet.id}
-                Stored Tweet ID: ${account.lastTweetId}
-                Would Send to Group: ${latestTweet.id !== account.lastTweetId ? 'Yes' : 'No (Already Sent)'}
-                Latest Tweet Text: ${latestTweet.text}
-                Evaluation Result: ${evaluation.trim()}`;
+                debugInfo = `
+Latest Tweet ID: ${latestTweet.id}
+Stored Tweet ID: ${account.lastTweetId}
+Would Send to Group: ${latestTweet.id !== account.lastTweetId ? 'Yes' : 'No (Already Sent)'}
+Latest Tweet Text: ${latestTweet.text}
+Evaluation Result: ${evaluation.trim()}`;
             }
             
             await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every 15 minutes.`);
