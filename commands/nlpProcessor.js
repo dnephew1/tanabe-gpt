@@ -79,9 +79,28 @@ class NLPProcessor {
                 return false;
             }
 
+            // Skip audio messages - let them be handled by audio transcription
+            if (message.type === 'audio' || message.type === 'ptt') {
+                logger.debug('Skipping NLP - audio message will be handled by transcription', { 
+                    type: message.type,
+                    hasMedia: message.hasMedia 
+                });
+                return false;
+            }
+
             const chat = await message.getChat();
             const contact = await message.getContact();
             const userId = contact.id._serialized;
+            const isAdminDM = !chat.isGroup && userId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
+
+            // Skip if message starts with "/" in admin DM
+            if (isAdminDM && message.body.startsWith('/')) {
+                logger.debug('Skipping NLP - admin debug message', { 
+                    userId,
+                    messageBody: message.body 
+                });
+                return false;
+            }
 
             logger.debug('NLP pre-processing check', {
                 isGroup: chat.isGroup,
