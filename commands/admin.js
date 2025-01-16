@@ -4,7 +4,13 @@ const { performCacheClearing } = require('./cacheManagement');
 const logger = require('../utils/logger');
 const { getNextSummaryInfo, scheduleNextSummary } = require('../utils/periodicSummaryUtils');
 const { runPeriodicSummary } = require('./periodicSummary');
+const { getCurrentApiKey } = require('./twitterMonitor');
 const axios = require('axios');
+
+function formatError(error) {
+    const location = error.stack?.split('\n')[1]?.trim()?.split('at ')[1] || 'unknown location';
+    return `${error.message} (at ${location})`;
+}
 
 // Helper function to check if message is from admin chat
 async function isAdminChat(message) {
@@ -98,10 +104,10 @@ async function handleTwitterDebug(message) {
             return;
         }
 
-        // Check if bearer token is configured
-        if (!config.CREDENTIALS.TWITTER_BEARER_TOKEN) {
-            logger.error('Twitter bearer token not configured');
-            await message.reply('Twitter API bearer token not configured in the system.');
+        // Check if API keys are configured
+        if (!config.CREDENTIALS.TWITTER_API_KEYS?.primary?.bearer_token || !config.CREDENTIALS.TWITTER_API_KEYS?.fallback?.bearer_token) {
+            logger.error('Twitter API keys not configured');
+            await message.reply('Twitter API keys not properly configured in the system.');
             return;
         }
 
@@ -112,11 +118,14 @@ async function handleTwitterDebug(message) {
                 username: account.username
             });
 
+            // Get current API key
+            const { key, name, usage } = await getCurrentApiKey();
+            
             // Get latest 5 tweets using Twitter API
             const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
             const response = await axios.get(twitterApiUrl, {
                 headers: {
-                    'Authorization': `Bearer ${config.CREDENTIALS.TWITTER_BEARER_TOKEN.trim()}`,
+                    'Authorization': `Bearer ${key.bearer_token.trim()}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -141,31 +150,35 @@ async function handleTwitterDebug(message) {
                 const evaluation = await runCompletion(prompt, 1);
                 
                 debugInfo = `
+API Status:
+- Primary Key Usage: ${usage.primary.usage}/${usage.primary.limit}
+- Fallback Key Usage: ${usage.fallback.usage}/${usage.fallback.limit}
+- Currently Using: ${name} key
+
 Latest Tweet ID: ${latestTweet.id}
+
 Stored Tweet ID: ${account.lastTweetId}
+
 Would Send to Group: ${latestTweet.id !== account.lastTweetId ? 'Yes' : 'No (Already Sent)'}
+
 Latest Tweet Text: ${latestTweet.text}
+
 Evaluation Result: ${evaluation.trim()}`;
             }
             
-            await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every 15 minutes.`);
+            await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every ${config.TWITTER.CHECK_INTERVAL/60000} minutes.`);
         } catch (error) {
-            logger.error('Twitter API error:', {
-                error: error.message,
-                response: error.response?.data,
-                status: error.response?.status,
-                username: account.username
-            });
+            logger.error('Twitter API error:', formatError(error));
             
-            let errorMessage = `Error checking @${account.username}: ${error.message}`;
+            let errorMessage = `Error checking @${account.username}: ${formatError(error)}`;
             if (error.response?.status === 401) {
                 errorMessage += '\nThe Twitter API token appears to be invalid or expired.';
             }
             await message.reply(errorMessage);
         }
     } catch (error) {
-        logger.error('Error in Twitter debug command:', error);
-        await message.reply(`Debug error: ${error.message}`);
+        logger.error('Error in Twitter debug command:', formatError(error));
+        await message.reply(`Debug error: ${formatError(error)}`);
     }
 }
 

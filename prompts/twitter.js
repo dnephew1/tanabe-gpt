@@ -2,25 +2,36 @@
 
 const TWITTER = {
     EVALUATE_NEWS: `
-Você está avaliando um tweet de notícia. Retorne apenas a palavra "null" se:
-- A notícia já foi mencionada anteriormente
-- Não é um evento crítico ou relevante
-- É sobre política dos EUA (exceto eventos graves ou mortes)
-- É apenas uma atualização de uma notícia já mencionada
-- É apenas notícia sobre celebridades (exceto mortes)
-- É notícia local com pouco impacto mundial
-
-Retorne a palavra "relevant" para posts relevantes, por exemplo:
-- Notícias mundiais críticas
-- Notícias relacionadas ao Brasil
-- Eventos de grande impacto global
-- Descobertas científicas importantes
-- Eventos esportivos significativos
-
-Tweet atual:
+Tweet para Avaliação:
 {post}
 
-Tweets anteriores:
+Instruções:
+Avalie o tweet acima com base nos seguintes critérios.
+
+Retorne apenas a palavra "null" se qualquer uma das condições abaixo se aplicar:
+
+- A notícia já foi mencionada nos tweets anteriores (duplicada ou atualização, veja os tweets anteriores após as instruções).
+- Não se trata de um evento crítico ou relevante globalmente.
+- É sobre política dos EUA (a menos que envolva eventos significativos, controvérsias ou mortes).
+- É apenas uma atualização de uma notícia previamente mencionada, sem introduzir novas informações substanciais (veja os tweets anteriores após as instruções)).
+- Diz respeito a celebridades (a menos que envolva morte ou impacto global).
+- É uma notícia local com impacto mínimo no cenário global.
+
+Retorne a palavra "relevant" se o tweet atender a algum dos critérios abaixo:
+
+- Trata-se de uma notícia global crítica.
+- Está relacionada ao Brasil ou impacta diretamente o Brasil.
+- Envolve eventos de grande impacto global.
+- Destaca descobertas científicas ou avanços importantes.
+- Discute eventos esportivos significativos com relevância internacional.
+
+Notas Adicionais:
+
+- Marque "relevant" apenas se o tweet apresentar implicações significativas ou efeitos de grande alcance.
+- Para mudanças regulatórias, marque como "relevant" somente se a mudança gerar ampla controvérsia ou discussão global.
+- Evite marcar atualizações como "relevant" a menos que adicionem informações substanciais à notícia original.
+
+Tweets Analisados Anteriormente (para Contexto):
 {previous_posts}
     `
 };
