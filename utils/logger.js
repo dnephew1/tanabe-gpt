@@ -29,8 +29,17 @@ function formatError(error) {
     if (!error) return 'Unknown error';
     if (typeof error === 'string') return error;
     
-    const location = error.stack?.split('\n')[1]?.trim()?.split('at ')[1] || 'unknown location';
-    return `${error.message} (at ${location})`;
+    // Get the first line of the stack trace that isn't from node_modules
+    const stackLine = error.stack?.split('\n')
+        .find(line => line.includes('at') && !line.includes('node_modules'))
+        ?.trim()
+        ?.split('at ')[1] || 'unknown location';
+    
+    // Extract just the file name and line number
+    const match = stackLine.match(/[^/]*\.js:\d+/);
+    const location = match ? match[0] : stackLine;
+    
+    return `${error.message} (${location})`;
 }
 
 // Function to format the log message with timestamp
@@ -58,6 +67,23 @@ function formatLogWithTimestamp(level, message, error = null) {
     }
     
     return logMessage;
+}
+
+// Function to format admin notification message
+function formatAdminMessage(level, message, error = null) {
+    // Skip the log level prefix entirely
+    let logMessage = message;
+    
+    if (error) {
+        const errorMsg = formatError(error);
+        // Only include the error message if it's not already part of the message
+        if (!message.includes(errorMsg)) {
+            logMessage += `: ${errorMsg}`;
+        }
+    }
+    
+    // Remove any double colons that might appear from error formatting
+    return logMessage.replace(/:+/g, ':');
 }
 
 // Function to check log file size and rotate if needed
@@ -119,7 +145,7 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
         return;
     }
 
-    // Format the message
+    // Format the message for console/file
     const formattedMessage = formatLogWithTimestamp(level, message, error);
     
     // Write to log file
@@ -149,7 +175,9 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
 
     // Check if this log level should be sent to admin
     if (shouldNotifyAdmin && config.SYSTEM?.ADMIN_NOTIFICATION_LEVELS?.[level]) {
-        await notifyAdmin(formattedMessage);
+        // Use simplified format for admin notifications
+        const adminMessage = formatAdminMessage(level, message, error);
+        await notifyAdmin(adminMessage);
     }
 }
 

@@ -7,11 +7,6 @@ const { runPeriodicSummary } = require('./periodicSummary');
 const { getCurrentApiKey } = require('./twitterMonitor');
 const axios = require('axios');
 
-function formatError(error) {
-    const location = error.stack?.split('\n')[1]?.trim()?.split('at ')[1] || 'unknown location';
-    return `${error.message} (at ${location})`;
-}
-
 // Helper function to check if message is from admin chat
 async function isAdminChat(message) {
     const chat = await message.getChat();
@@ -32,7 +27,7 @@ async function handleCacheClear(message) {
         await performCacheClearing();
         await message.reply('Cache cleared successfully');
     } catch (error) {
-        logger.error('Error clearing cache:', error);
+        logger.error('Error clearing cache', error);
         await message.reply(`Error clearing cache: ${error.message}`);
     }
 }
@@ -168,17 +163,17 @@ Evaluation Result: ${evaluation.trim()}`;
             
             await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every ${config.TWITTER.CHECK_INTERVAL/60000} minutes.`);
         } catch (error) {
-            logger.error('Twitter API error:', formatError(error));
+            logger.error('Twitter API error', error);
             
-            let errorMessage = `Error checking @${account.username}: ${formatError(error)}`;
+            let errorMessage = `Error checking @${account.username}: ${error.message}`;
             if (error.response?.status === 401) {
                 errorMessage += '\nThe Twitter API token appears to be invalid or expired.';
             }
             await message.reply(errorMessage);
         }
     } catch (error) {
-        logger.error('Error in Twitter debug command:', formatError(error));
-        await message.reply(`Debug error: ${formatError(error)}`);
+        logger.error('Error in Twitter debug command', error);
+        await message.reply(`Debug error: ${error.message}`);
     }
 }
 

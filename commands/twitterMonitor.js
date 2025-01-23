@@ -11,11 +11,6 @@ let apiUsageCache = {
     lastCheck: null
 };
 
-function formatError(error) {
-    const location = error.stack?.split('\n')[1]?.trim()?.split('at ')[1] || 'unknown location';
-    return `${error.message} (at ${location})`;
-}
-
 async function getKeyUsage(key, name) {
     try {
         const url = 'https://api.twitter.com/2/usage/tweets';
@@ -37,7 +32,6 @@ async function getKeyUsage(key, name) {
         }
         throw new Error('Invalid response format from Twitter API');
     } catch (error) {
-        logger.error(`Error checking ${name} key usage:`, formatError(error));
         throw error;
     }
 }
@@ -71,7 +65,7 @@ async function checkTwitterAPIUsage(forceCheck = false) {
             lastCheck: now
         };
         
-        logger.debug('Twitter API usage response:', {
+        logger.debug('Twitter API usage response', {
             current_key: currentKey,
             primary_usage: `${primaryUsage.usage}/${primaryUsage.limit}`,
             fallback_usage: `${fallbackUsage.usage}/${fallbackUsage.limit}`
@@ -85,14 +79,13 @@ async function checkTwitterAPIUsage(forceCheck = false) {
     } catch (error) {
         // If we have cached data, use it even if it's old
         if (apiUsageCache.lastCheck) {
-            logger.warn('Failed to check API usage, using cached data:', formatError(error));
+            logger.warn('Failed to check API usage, using cached data');
             return {
                 primary: apiUsageCache.primary,
                 fallback: apiUsageCache.fallback,
                 currentKey: apiUsageCache.currentKey
             };
         }
-        logger.error('Error checking Twitter API usage:', formatError(error));
         throw error;
     }
 }
@@ -133,66 +126,86 @@ async function fetchLatestTweets(userId) {
         if (!response.data.data) return [];
         return response.data.data;
     } catch (error) {
-        logger.error('Error fetching tweets:', formatError(error));
+        logger.error('Error fetching tweets:', error);
         throw error;
     }
 }
 
 async function initializeTwitterMonitor() {
-    try {
-        // Get target group
-        const chats = await global.client.getChats();
-        const targetGroup = chats.find(chat => chat.name === config.TWITTER.TARGET_GROUP);
-        
-        if (!targetGroup) {
-            logger.error('Target group not found, skipping Twitter monitor initialization');
-            return;
-        }
+    let attempts = 0;
+    const maxAttempts = 3;
+    const waitTimes = [0, 6 * 60 * 1000, 10 * 60 * 1000]; // 0, 6 mins, 10 mins
 
-        // Initial API usage check
+    while (attempts < maxAttempts) {
         try {
+            // Get target group
+            const chats = await global.client.getChats();
+            const targetGroup = chats.find(chat => chat.name === config.TWITTER.TARGET_GROUP);
+            
+            if (!targetGroup) {
+                logger.error('Target group not found, skipping Twitter monitor initialization');
+                return;
+            }
+
+            // Initial API usage check
             const usage = await checkTwitterAPIUsage(true);
             logger.info(`Twitter monitor initialized (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
-        } catch (error) {
-            logger.warn('Twitter monitor initialized with unknown API usage status:', formatError(error));
-        }
 
-        // Set up monitoring interval
-        const monitorInterval = setInterval(async () => {
-            try {
-                // Check API usage before processing (will use cache if check was recent)
-                const usage = await checkTwitterAPIUsage();
-                logger.debug(`Twitter monitor check (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
-                
-                for (const account of config.TWITTER.ACCOUNTS) {
-                    const tweets = await fetchLatestTweets(account.userId);
-                    if (tweets.length === 0) continue;
-
-                    // Get the latest tweet and previous tweets
-                    const [latestTweet, ...previousTweets] = tweets;
+            // Set up monitoring interval
+            const monitorInterval = setInterval(async () => {
+                try {
+                    // Check API usage before processing (will use cache if check was recent)
+                    const usage = await checkTwitterAPIUsage();
+                    logger.debug(`Twitter monitor check (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
                     
-                    // Skip if we've already processed this tweet
-                    if (latestTweet.id === account.lastTweetId) continue;
+                    for (const account of config.TWITTER.ACCOUNTS) {
+                        const tweets = await fetchLatestTweets(account.userId);
+                        if (tweets.length === 0) continue;
 
-                    // Evaluate if tweet should be shared
-                    const isRelevant = await evaluateTweet(latestTweet.text, previousTweets.map(t => t.text));
-                    
-                    if (isRelevant) {
-                        const message = `*Breaking News* 🗞️\n\n${latestTweet.text}\n\nSource: @${account.username}`;
-                        await targetGroup.sendMessage(message);
-                        logger.info(`Sent tweet from ${account.username}: ${latestTweet.text.substring(0, 50)}...`);
+                        // Get the latest tweet and previous tweets
+                        const [latestTweet, ...previousTweets] = tweets;
+                        
+                        // Skip if we've already processed this tweet
+                        if (latestTweet.id === account.lastTweetId) continue;
+
+                        // Evaluate if tweet should be shared
+                        const isRelevant = await evaluateTweet(latestTweet.text, previousTweets.map(t => t.text));
+                        
+                        if (isRelevant) {
+                            const message = `*Breaking News* 🗞️\n\n${latestTweet.text}\n\nSource: @${account.username}`;
+                            await targetGroup.sendMessage(message);
+                            logger.info(`Sent tweet from ${account.username}: ${latestTweet.text.substring(0, 50)}...`);
+                        }
+
+                        // Update last tweet ID in memory
+                        account.lastTweetId = latestTweet.id;
                     }
-
-                    // Update last tweet ID in memory
-                    account.lastTweetId = latestTweet.id;
+                } catch (error) {
+                    logger.error('Error in Twitter monitor interval:', error);
                 }
-            } catch (error) {
-                logger.error('Error in Twitter monitor interval:', formatError(error));
-            }
-        }, config.TWITTER.CHECK_INTERVAL);
+            }, config.TWITTER.CHECK_INTERVAL);
 
-    } catch (error) {
-        logger.error('Error during Twitter monitor initialization:', formatError(error));
+            // If we get here, initialization was successful
+            return;
+
+        } catch (error) {
+            attempts++;
+            
+            if (error.response && error.response.status === 429) {
+                if (attempts === maxAttempts) {
+                    logger.error('Twitter monitor initialization failed after 3 attempts due to rate limiting');
+                    return;
+                }
+                
+                const waitTime = waitTimes[attempts];
+                logger.warn(`Twitter API rate limit reached (attempt ${attempts}/${maxAttempts}). Waiting ${waitTime/60000} minutes before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+                // If it's not a rate limit error, log and return
+                logger.error('Twitter monitor initialization failed:', error.message);
+                return;
+            }
+        }
     }
 }
 
@@ -224,8 +237,8 @@ Evaluation Result: ${isRelevant ? 'RELEVANT' : 'NOT RELEVANT'}`;
         
         await message.reply(debugInfo);
     } catch (error) {
-        logger.error('Error in Twitter debug:', formatError(error));
-        await message.reply('Error testing Twitter functionality: ' + formatError(error));
+        logger.error('Error in Twitter debug:', error);
+        await message.reply('Error testing Twitter functionality: ' + error.message);
     }
 }
 

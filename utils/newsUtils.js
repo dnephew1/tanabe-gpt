@@ -46,7 +46,11 @@ async function searchNews(searchTerm) {
         const xmlString = response.data;
         const newsItems = parseXML(xmlString).slice(0, 5);
         
-        return newsItems.map(item => `${item.title} (${item.source})`);
+        return newsItems.map(item => {
+            const date = new Date(item.pubDate);
+            const relativeTime = getRelativeTime(date);
+            return `${item.title} (${item.source}) - ${relativeTime}`;
+        });
     } catch (error) {
         console.error(`[ERROR] An error occurred in the searchNews function:`, error.message);
         return [];

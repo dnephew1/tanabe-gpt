@@ -243,7 +243,11 @@ class NLPProcessor {
             const processedCommand = completion.choices[0].message.content.trim();
             logger.prompt('[RESPONSE] Received from OpenAI:\n------- RESPONSE START -------\n' + processedCommand + '\n-------- RESPONSE END --------');
             
-            logger.info('NLP processed command:', processedCommand);
+            if (processedCommand.startsWith('#')) {
+                const commandParts = processedCommand.slice(1).trim().split(' ');
+                const commandName = commandParts[0].toUpperCase();
+                logger.info(`NLP detected command: ${commandName} with input: ${commandParts.slice(1).join(' ')}`);
+            }
             
             // Special handling for resumo_config command
             if (processedCommand.startsWith('#ferramentaresumo')) {

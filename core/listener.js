@@ -69,6 +69,7 @@ function setupListeners(client) {
                         prefix: message.body[0],
                         command: message.body 
                     });
+                    await chat.sendStateTyping();
                     const result = await commandManager.processCommand(message);
                     if (!result) {
                         logger.debug('Command processing failed or command not found');
@@ -82,6 +83,7 @@ function setupListeners(client) {
                     const nlpResult = await nlpProcessor.processNaturalLanguage(message);
                     if (nlpResult) {
                         logger.debug('NLP produced a command', { nlpResult });
+                        await chat.sendStateTyping();
                         // Create a new message object while preserving the original message's properties and methods
                         const nlpMessage = Object.create(
                             Object.getPrototypeOf(message),

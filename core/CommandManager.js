@@ -237,6 +237,11 @@ class CommandManager {
             
             if (!command) return false;
 
+            const chat = await message.getChat();
+            const contact = await message.getContact();
+            
+            logger.info(`Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${input}`);
+            
             logger.debug('Processing command', {
                 command: command.name,
                 input,
@@ -252,7 +257,6 @@ class CommandManager {
             }
 
             // Get chat ID and name
-            const chat = await message.getChat();
             const chatId = chat.id._serialized;
 
             // Check if command is allowed in this chat

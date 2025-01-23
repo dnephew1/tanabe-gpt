@@ -14,5 +14,5 @@ start.sh
 config_copy.js
 personalities.js
 .DS_Store
-tanabe-gpt.timer
+tanabe-monitor.service
 setup.sh
