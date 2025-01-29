@@ -152,7 +152,7 @@ async function initializeTwitterMonitor() {
             
             // Check if both keys are over limit
             if (usage.primary.usage >= 100 && usage.fallback.usage >= 100) {
-                const message = `⚠️ Twitter Monitor Disabled: Both API keys are over rate limit.\nPrimary: ${usage.primary.usage}/${usage.primary.limit}\nFallback: ${usage.fallback.usage}/${usage.fallback.limit}`;
+                const message = `Twitter Monitor Disabled: Both API keys are over rate limit.`;
                 logger.warn(message);
                 
                 // Notify admin via WhatsApp
