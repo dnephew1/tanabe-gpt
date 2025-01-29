@@ -149,6 +149,21 @@ async function initializeTwitterMonitor() {
 
             // Initial API usage check
             const usage = await checkTwitterAPIUsage(true);
+            
+            // Check if both keys are over limit
+            if (usage.primary.usage >= 100 && usage.fallback.usage >= 100) {
+                const message = `⚠️ Twitter Monitor Disabled: Both API keys are over rate limit.\nPrimary: ${usage.primary.usage}/${usage.primary.limit}\nFallback: ${usage.fallback.usage}/${usage.fallback.limit}`;
+                logger.warn(message);
+                
+                // Notify admin via WhatsApp
+                const adminChat = await global.client.getChatById(config.CREDENTIALS.ADMIN_NUMBER + '@c.us');
+                if (adminChat) {
+                    await adminChat.sendMessage(message);
+                }
+                
+                return; // Exit without setting up the monitor interval
+            }
+
             logger.info(`Twitter monitor initialized (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
 
             // Set up monitoring interval
