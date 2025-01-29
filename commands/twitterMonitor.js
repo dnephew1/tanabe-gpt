@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 let apiUsageCache = {
     primary: null,
     fallback: null,
+    fallback2: null,
     currentKey: 'primary',
     lastCheck: null
 };
@@ -43,24 +44,32 @@ async function checkTwitterAPIUsage(forceCheck = false) {
         return {
             primary: apiUsageCache.primary,
             fallback: apiUsageCache.fallback,
+            fallback2: apiUsageCache.fallback2,
             currentKey: apiUsageCache.currentKey
         };
     }
 
     try {
-        const { primary, fallback } = config.CREDENTIALS.TWITTER_API_KEYS;
+        const { primary, fallback, fallback2 } = config.CREDENTIALS.TWITTER_API_KEYS;
         
-        // Get usage for both keys
+        // Get usage for all keys
         const primaryUsage = await getKeyUsage(primary, 'primary');
         const fallbackUsage = await getKeyUsage(fallback, 'fallback');
+        const fallback2Usage = await getKeyUsage(fallback2, 'fallback2');
         
-        // Determine which key to use
-        const currentKey = primaryUsage.usage >= 100 ? 'fallback' : 'primary';
+        // Determine which key to use (prioritize primary, then fallback, then fallback2)
+        let currentKey = 'fallback2';
+        if (primaryUsage.usage < 100) {
+            currentKey = 'primary';
+        } else if (fallbackUsage.usage < 100) {
+            currentKey = 'fallback';
+        }
         
         // Update cache
         apiUsageCache = {
             primary: primaryUsage,
             fallback: fallbackUsage,
+            fallback2: fallback2Usage,
             currentKey,
             lastCheck: now
         };
@@ -68,12 +77,14 @@ async function checkTwitterAPIUsage(forceCheck = false) {
         logger.debug('Twitter API usage response', {
             current_key: currentKey,
             primary_usage: `${primaryUsage.usage}/${primaryUsage.limit}`,
-            fallback_usage: `${fallbackUsage.usage}/${fallbackUsage.limit}`
+            fallback_usage: `${fallbackUsage.usage}/${fallbackUsage.limit}`,
+            fallback2_usage: `${fallback2Usage.usage}/${fallback2Usage.limit}`
         });
         
         return {
             primary: primaryUsage,
             fallback: fallbackUsage,
+            fallback2: fallback2Usage,
             currentKey
         };
     } catch (error) {
@@ -83,6 +94,7 @@ async function checkTwitterAPIUsage(forceCheck = false) {
             return {
                 primary: apiUsageCache.primary,
                 fallback: apiUsageCache.fallback,
+                fallback2: apiUsageCache.fallback2,
                 currentKey: apiUsageCache.currentKey
             };
         }
@@ -91,13 +103,17 @@ async function checkTwitterAPIUsage(forceCheck = false) {
 }
 
 function getCurrentApiKey() {
-    const { primary, fallback } = config.CREDENTIALS.TWITTER_API_KEYS;
+    const { primary, fallback, fallback2 } = config.CREDENTIALS.TWITTER_API_KEYS;
+    const key = apiUsageCache.currentKey === 'primary' ? primary : 
+                apiUsageCache.currentKey === 'fallback' ? fallback : 
+                fallback2;
     return {
-        key: apiUsageCache.currentKey === 'primary' ? primary : fallback,
+        key,
         name: apiUsageCache.currentKey,
         usage: {
             primary: apiUsageCache.primary,
-            fallback: apiUsageCache.fallback
+            fallback: apiUsageCache.fallback,
+            fallback2: apiUsageCache.fallback2
         }
     };
 }
@@ -109,7 +125,15 @@ async function evaluateTweet(latestTweet, previousTweets) {
 
     logger.prompt('Twitter news evaluation prompt', prompt);
     const result = await runCompletion(prompt, 0.3);
-    return result.trim().toLowerCase() === 'relevant';
+    const isRelevant = result.trim().toLowerCase() === 'relevant';
+    
+    logger.info('Tweet evaluation decision', {
+        tweet: latestTweet.substring(0, 100) + (latestTweet.length > 100 ? '...' : ''),
+        decision: isRelevant ? 'RELEVANT - Will send to group' : 'NOT RELEVANT - Will skip',
+        raw_response: result.trim()
+    });
+    
+    return isRelevant;
 }
 
 async function fetchLatestTweets(userId) {
@@ -150,9 +174,9 @@ async function initializeTwitterMonitor() {
             // Initial API usage check
             const usage = await checkTwitterAPIUsage(true);
             
-            // Check if both keys are over limit
-            if (usage.primary.usage >= 100 && usage.fallback.usage >= 100) {
-                const message = `Twitter Monitor Disabled: Both API keys are over rate limit.`;
+            // Check if all keys are over limit
+            if (usage.primary.usage >= 100 && usage.fallback.usage >= 100 && usage.fallback2.usage >= 100) {
+                const message = `⚠️ Twitter Monitor Disabled: All API keys are over rate limit.\nPrimary: ${usage.primary.usage}/${usage.primary.limit}\nFallback: ${usage.fallback.usage}/${usage.fallback.limit}\nFallback2: ${usage.fallback2.usage}/${usage.fallback2.limit}`;
                 logger.warn(message);
                 
                 // Notify admin via WhatsApp
@@ -164,14 +188,14 @@ async function initializeTwitterMonitor() {
                 return; // Exit without setting up the monitor interval
             }
 
-            logger.info(`Twitter monitor initialized (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
+            logger.info(`Twitter monitor initialized (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, Fallback2: ${usage.fallback2.usage}/${usage.fallback2.limit}, using ${usage.currentKey} key)`);
 
             // Set up monitoring interval
             const monitorInterval = setInterval(async () => {
                 try {
                     // Check API usage before processing (will use cache if check was recent)
                     const usage = await checkTwitterAPIUsage();
-                    logger.debug(`Twitter monitor check (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, using ${usage.currentKey} key)`);
+                    logger.debug(`Twitter monitor check (Primary: ${usage.primary.usage}/${usage.primary.limit}, Fallback: ${usage.fallback.usage}/${usage.fallback.limit}, Fallback2: ${usage.fallback2.usage}/${usage.fallback2.limit}, using ${usage.currentKey} key)`);
                     
                     for (const account of config.TWITTER.ACCOUNTS) {
                         const tweets = await fetchLatestTweets(account.userId);
@@ -242,6 +266,7 @@ async function debugTwitterFunctionality(message) {
         const debugInfo = `API Status:
 - Primary Key Usage: ${usage.primary.usage}/${usage.primary.limit}
 - Fallback Key Usage: ${usage.fallback.usage}/${usage.fallback.limit}
+- Fallback2 Key Usage: ${usage.fallback2.usage}/${usage.fallback2.limit}
 - Currently Using: ${usage.currentKey} key
 
 Latest Tweet ID: ${latestTweet.id}
