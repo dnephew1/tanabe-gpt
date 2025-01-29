@@ -16,11 +16,22 @@ async function handleChat(message, command, input) {
         const chat = await message.getChat();
         groupName = chat.isGroup ? chat.name : null;
         
+        // Format current timestamp in Portuguese
+        const timestamp = new Date().toLocaleString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            day: '2-digit',
+            month: '2-digit',
+            year: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
         logger.debug('Processing ChatGPT command', {
             name,
             question,
             hasQuoted: message.hasQuotedMsg,
-            groupName
+            groupName,
+            timestamp
         });
 
         let prompt;
@@ -42,7 +53,8 @@ async function handleChat(message, command, input) {
                         question,
                         context: pageContent,
                         maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
-                        messageHistory: await getMessageHistory(groupName)
+                        messageHistory: await getMessageHistory(groupName),
+                        timestamp
                     });
                 } catch (error) {
                     const errorMessage = await message.reply('Não consegui acessar o link para fornecer contexto adicional.');
@@ -58,7 +70,8 @@ async function handleChat(message, command, input) {
                     question,
                     context: quotedText,
                     maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
-                    messageHistory: await getMessageHistory(groupName)
+                    messageHistory: await getMessageHistory(groupName),
+                    timestamp
                 });
             }
         } else {
@@ -71,7 +84,8 @@ async function handleChat(message, command, input) {
                 name,
                 question,
                 maxMessages: config.SYSTEM.MAX_LOG_MESSAGES,
-                messageHistory: messageHistory
+                messageHistory: messageHistory,
+                timestamp
             });
         }
 
