@@ -1,5 +1,23 @@
+# Environment variables
+configs/.env
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
 config.js
-node_modules
 .wwebjs_auth
 .wwebjs_cache
 backup_index.js
@@ -13,6 +31,6 @@ tanabe-gpt.service
 start.sh
 config_copy.js
 personalities.js
-.DS_Store
 tanabe-monitor.service
 setup.sh
+periodic_summary_config.js

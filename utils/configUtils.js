@@ -2,105 +2,110 @@ const path = require('path');
 const fsPromises = require('fs').promises;
 const config = require('../config');
 
-async function saveConfig() {
+async function savePeriodicSummaryConfig(periodicSummaryConfig) {
     try {
-        const configPath = path.join(__dirname, '..', 'config.js');
+        const configPath = path.join(__dirname, '..', 'configs', 'periodic_summary_config.js');
         
-        // Special handling for PERIODIC_SUMMARY section
-        if (config.PERIODIC_SUMMARY) {
-            // Format the groups configuration with proper indentation, only including non-default values
-            const groupsConfig = Object.entries(config.PERIODIC_SUMMARY.groups || {})
-                .map(([name, settings]) => {
-                    const defaults = config.PERIODIC_SUMMARY.defaults;
-                    const customConfig = {};
+        // Format the groups configuration with proper indentation
+        const groupsConfig = Object.entries(periodicSummaryConfig.groups || {})
+            .map(([name, settings]) => {
+                const defaults = periodicSummaryConfig.defaults;
+                const customConfig = {};
 
-                    // Only include enabled if it's false (since default is true)
-                    if (settings.enabled === false) {
-                        customConfig.enabled = false;
+                // Only include enabled if it's false (since default is true)
+                if (settings.enabled === false) {
+                    customConfig.enabled = false;
+                }
+
+                // Only include intervalHours if different from default
+                if (settings.intervalHours !== undefined && settings.intervalHours !== defaults.intervalHours) {
+                    customConfig.intervalHours = settings.intervalHours;
+                }
+
+                // Only include quietTime if different from default
+                if (settings.quietTime) {
+                    const quietTimeConfig = {};
+                    if (settings.quietTime.start !== defaults.quietTime.start) {
+                        quietTimeConfig.start = settings.quietTime.start;
                     }
-
-                    // Only include intervalHours if different from default
-                    if (settings.intervalHours !== undefined && settings.intervalHours !== defaults.intervalHours) {
-                        customConfig.intervalHours = settings.intervalHours;
+                    if (settings.quietTime.end !== defaults.quietTime.end) {
+                        quietTimeConfig.end = settings.quietTime.end;
                     }
+                    if (Object.keys(quietTimeConfig).length > 0) {
+                        customConfig.quietTime = quietTimeConfig;
+                    }
+                }
 
-                    // Only include quietTime if different from default
-                    if (settings.quietTime) {
-                        const quietTimeConfig = {};
-                        if (settings.quietTime.start !== defaults.quietTime.start) {
-                            quietTimeConfig.start = settings.quietTime.start;
+                // Only include deleteAfter if different from default
+                if (settings.deleteAfter !== undefined && settings.deleteAfter !== defaults.deleteAfter) {
+                    customConfig.deleteAfter = settings.deleteAfter;
+                }
+
+                // Only include prompt if it exists and is different from default
+                if (settings.prompt) {
+                    customConfig.prompt = settings.prompt;
+                }
+
+                // If there are no custom configs, just save enabled: true
+                const configToSave = Object.keys(customConfig).length > 0 ? customConfig : { enabled: true };
+
+                // Format the configuration
+                const configLines = Object.entries(configToSave)
+                    .map(([key, value]) => {
+                        if (key === 'quietTime') {
+                            return `            quietTime: {
+                start: '${value.start}',
+                end: '${value.end}'
+            }`;
                         }
-                        if (settings.quietTime.end !== defaults.quietTime.end) {
-                            quietTimeConfig.end = settings.quietTime.end;
+                        if (key === 'prompt') {
+                            return `            prompt: \`${value}\``;
                         }
-                        if (Object.keys(quietTimeConfig).length > 0) {
-                            customConfig.quietTime = quietTimeConfig;
-                        }
-                    }
+                        return `            ${key}: ${JSON.stringify(value)}`;
+                    })
+                    .join(',\n');
 
-                    // Only include deleteAfter if different from default
-                    if (settings.deleteAfter !== undefined && settings.deleteAfter !== defaults.deleteAfter) {
-                        customConfig.deleteAfter = settings.deleteAfter;
-                    }
+                return `        '${name}': {\n${configLines}\n        }`;
+            })
+            .join(',\n');
 
-                    // Only include prompt if it exists and is different from default
-                    if (settings.prompt) {
-                        customConfig.prompt = settings.prompt;
-                    }
+        const periodicSummaryContent = `// periodic_summary_config.js
 
-                    // If there are no custom configs, just save enabled: true
-                    const configToSave = Object.keys(customConfig).length > 0 ? customConfig : { enabled: true };
-
-                    // Format the configuration
-                    const configLines = Object.entries(configToSave)
-                        .map(([key, value]) => {
-                            if (key === 'quietTime') {
-                                return `                        quietTime: {
-                            ${Object.entries(value).map(([k, v]) => `${k}: '${v}'`).join(',\n                            ')}
-                        }`;
-                            }
-                            if (key === 'prompt') {
-                                return `                        prompt: \`${value}\``;
-                            }
-                            return `                        ${key}: ${JSON.stringify(value)}`;
-                        })
-                        .join(',\n');
-
-                    return `        '${name}': {\n${configLines}\n                    }`;
-                })
-                .join(',\n');
-
-            const periodicSummarySection = `const PERIODIC_SUMMARY = {
+const PERIODIC_SUMMARY = {
     defaults: {
-        intervalHours: ${config.PERIODIC_SUMMARY.defaults.intervalHours},
+        intervalHours: ${periodicSummaryConfig.defaults.intervalHours},
         quietTime: {
-            start: '${config.PERIODIC_SUMMARY.defaults.quietTime.start}',
-            end: '${config.PERIODIC_SUMMARY.defaults.quietTime.end}'
+            start: '${periodicSummaryConfig.defaults.quietTime.start}',
+            end: '${periodicSummaryConfig.defaults.quietTime.end}'
         },
-        deleteAfter: ${config.PERIODIC_SUMMARY.defaults.deleteAfter === null ? 'null' : config.PERIODIC_SUMMARY.defaults.deleteAfter},
-        promptPath: '${config.PERIODIC_SUMMARY.defaults.promptPath}'
+        deleteAfter: ${periodicSummaryConfig.defaults.deleteAfter === null ? 'null' : periodicSummaryConfig.defaults.deleteAfter},
+        promptPath: '${periodicSummaryConfig.defaults.promptPath}'
     },
     groups: {
 ${groupsConfig}
     }
-};`;
+};
 
-            // Read the current file content
-            const currentContent = await fsPromises.readFile(configPath, 'utf8');
-            
-            // Replace the PERIODIC_SUMMARY section
-            const updatedContent = currentContent.replace(
-                /const\s+PERIODIC_SUMMARY\s*=\s*{[^]*?};/s,
-                periodicSummarySection
-            );
-            
-            // Write the updated content back to the file
-            await fsPromises.writeFile(configPath, updatedContent, 'utf8');
-            console.log('Configuration saved successfully');
+module.exports = PERIODIC_SUMMARY;`;
+
+        await fsPromises.writeFile(configPath, periodicSummaryContent, 'utf8');
+        console.log('Periodic summary configuration saved successfully');
+    } catch (error) {
+        console.error('Error saving periodic summary configuration:', error);
+        throw error;
+    }
+}
+
+async function saveConfig() {
+    try {
+        // If we're saving periodic summary configuration, use the dedicated function
+        if (config.PERIODIC_SUMMARY) {
+            await savePeriodicSummaryConfig(config.PERIODIC_SUMMARY);
             return;
         }
 
         // For other changes, use the default JSON.stringify approach
+        const configPath = path.join(__dirname, '..', 'config.js');
         const configContent = `// config.js - Generated ${new Date().toISOString()}
 
 module.exports = ${JSON.stringify(config, null, 2)};`;
