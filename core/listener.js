@@ -99,6 +99,27 @@ function setupListeners(client) {
                     logger.error('Error in NLP processing:', error);
                 }
                 
+                // Handle audio messages
+                if (['audio', 'ptt'].includes(message.type) && message.hasMedia) {
+                    logger.debug('Processing audio message for transcription');
+                    try {
+                        const audioCommand = config.COMMANDS.AUDIO;
+                        if (audioCommand) {
+                            await chat.sendStateTyping();
+                            // Create a new message object that preserves all methods
+                            const audioMessage = Object.create(
+                                Object.getPrototypeOf(message),
+                                Object.getOwnPropertyDescriptors(message)
+                            );
+                            audioMessage.body = '#audio';
+                            await commandManager.processCommand(audioMessage);
+                            return;
+                        }
+                    } catch (error) {
+                        logger.error('Error processing audio message:', error);
+                    }
+                }
+                
                 // Check for links last
                 await handleAyubLinkSummary(message);
                 

@@ -10,19 +10,29 @@ const crypto = require('crypto');
 async function handleAudio(message, command) {
     let audioPath = null;
     try {
-        // Check if message has media and is audio/voice
-        if (!message.hasMedia || !['audio', 'ptt'].includes(message.type)) {
-            logger.debug('Invalid audio message type', { type: message.type });
+        let targetMessage = message;
+        
+        // If message has quoted message, check if it's an audio
+        if (message.hasQuotedMsg) {
+            const quotedMsg = await message.getQuotedMessage();
+            if (['audio', 'ptt'].includes(quotedMsg.type) && quotedMsg.hasMedia) {
+                targetMessage = quotedMsg;
+            }
+        }
+
+        // Check if target message has media and is audio/voice
+        if (!targetMessage.hasMedia || !['audio', 'ptt'].includes(targetMessage.type)) {
+            logger.debug('Invalid audio message type', { type: targetMessage.type });
             const errorMessage = await message.reply(command.errorMessages.invalidFormat);
             await handleAutoDelete(errorMessage, command, true);
             return;
         }
 
         // Download the audio
-        const media = await message.downloadMedia();
+        const media = await targetMessage.downloadMedia();
         if (!media || !media.data) {
             logger.error('Failed to download audio');
-            const errorMessage = await message.reply(command.errorMessages.error);
+            const errorMessage = await message.reply(command.errorMessages.downloadError);
             await handleAutoDelete(errorMessage, command, true);
             return;
         }
@@ -51,7 +61,7 @@ async function handleAudio(message, command) {
         const transcription = await transcribeAudio(audioPath);
         if (!transcription) {
             logger.error('Empty transcription received');
-            const errorMessage = await message.reply(command.errorMessages.error);
+            const errorMessage = await message.reply(command.errorMessages.transcriptionError);
             await handleAutoDelete(errorMessage, command, true);
             return;
         }
