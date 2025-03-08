@@ -82,6 +82,27 @@ class NLPProcessor {
                 return false;
             }
 
+            // Check if the bot is mentioned
+            const botNumber = config.CREDENTIALS.BOT_NUMBER;
+            const isBotMentioned = message.mentionedIds && 
+                                  message.mentionedIds.some(id => id === `${botNumber}@c.us`);
+            
+            // If the bot is mentioned, always process with NLP
+            if (isBotMentioned) {
+                logger.debug('Processing with NLP - bot was mentioned', {
+                    messageBody: message.body
+                });
+                return true;
+            }
+
+            // Skip if message is a direct tag command (handled by tag.js)
+            if (message.body.startsWith('@') && message.body.split(' ')[0].length > 1) {
+                logger.debug('Skipping NLP - direct tag command detected', {
+                    tag: message.body.split(' ')[0]
+                });
+                return false;
+            }
+
             // Skip audio messages - let them be handled by audio transcription
             if (message.type === 'audio' || message.type === 'ptt') {
                 logger.debug('Skipping NLP - audio message will be handled by transcription', { 
@@ -143,7 +164,6 @@ class NLPProcessor {
             if (chat.isGroup) {
                 // Check if message mentions the bot
                 const mentions = message.mentionedIds || [];
-                const botNumber = config.CREDENTIALS.BOT_NUMBER;
                 const botId = `${botNumber}@c.us`;
                 
                 logger.debug('Checking bot mention', {
@@ -196,9 +216,50 @@ class NLPProcessor {
                 return null;
             }
 
+            // Clean the message body if the bot is mentioned
+            let messageBody = message.body;
+            const botNumber = config.CREDENTIALS.BOT_NUMBER;
+            const isBotMentioned = message.mentionedIds && 
+                                  message.mentionedIds.some(id => id === `${botNumber}@c.us`);
+            
+            if (isBotMentioned) {
+                // Remove the bot mention from the message
+                messageBody = messageBody.replace(new RegExp(`@${botNumber}\\s*`, 'i'), '').trim();
+                logger.debug('Cleaned message body after bot mention', {
+                    original: message.body,
+                    cleaned: messageBody
+                });
+            }
+            
+            // Check for common command patterns before using the API
+            const lowerBody = messageBody.toLowerCase();
+            
+            // Check for command list requests
+            if (lowerBody.includes('comandos') || 
+                lowerBody.includes('o que você pode fazer') || 
+                lowerBody.includes('o que voce pode fazer') ||
+                lowerBody.includes('quais são seus comandos') ||
+                lowerBody.includes('quais sao seus comandos') ||
+                lowerBody.includes('me ajude') ||
+                lowerBody.includes('help') ||
+                lowerBody.includes('ajuda')) {
+                logger.debug('Detected command list request via pattern matching');
+                return '#COMMAND_LIST';
+            }
+            
+            // Check for wizard mode activation
+            if (lowerBody.includes('ferramentaresumo') || lowerBody.includes('ferramenta resumo')) {
+                logger.debug('Detected resumo_config command via pattern matching');
+                return '#ferramentaresumo';
+            }
+            
+            // Get chat information for tag-specific commands (needed for the command list)
+            const chat = await message.getChat();
+            const chatName = chat.name;
+
             logger.debug('Processing natural language message', {
                 messageId: message.id?._serialized,
-                text: message.body,
+                text: messageBody,
                 hasQuoted: message.hasQuotedMsg,
                 hasMedia: message.hasMedia,
                 type: message.type
@@ -211,6 +272,42 @@ class NLPProcessor {
                     const prefixes = cmd.prefixes ? cmd.prefixes.join(' or ') : 'No prefix';
                     const capabilities = this.getCommandCapabilities(cmd);
                     logger.debug('Command capability check', { command: name, capabilities });
+                    
+                    // Add tag information for the TAG command
+                    if (name === 'TAG' && chat.isGroup) {
+                        let tagInfo = '';
+                        
+                        // Add special tags
+                        if (cmd.specialTags && Object.keys(cmd.specialTags).length > 0) {
+                            tagInfo += '\n    Special Tags: ' + Object.keys(cmd.specialTags).join(', ');
+                            
+                            // Add descriptions for special tags
+                            tagInfo += '\n    Special Tag Descriptions:';
+                            for (const [tag, tagConfig] of Object.entries(cmd.specialTags)) {
+                                tagInfo += `\n      ${tag}: ${tagConfig.description || 'No description'}`;
+                            }
+                        }
+                        
+                        // Add group-specific tags
+                        if (cmd.groupTags && cmd.groupTags[chatName] && Object.keys(cmd.groupTags[chatName]).length > 0) {
+                            tagInfo += '\n    Group Tags: ' + Object.keys(cmd.groupTags[chatName]).join(', ');
+                            
+                            // Add details about each group tag
+                            tagInfo += '\n    Tag Details:';
+                            for (const [tag, tagConfig] of Object.entries(cmd.groupTags[chatName])) {
+                                // Get description and members from config
+                                const description = tagConfig.description || 'No description';
+                                const members = tagConfig.members.join(', ');
+                                tagInfo += `\n      ${tag}: ${description} (${members})`;
+                            }
+                        }
+                        
+                        return `${name}:
+    Description: ${cmd.description}
+    Usage: No prefix (use @tagname)
+    Supports: ${capabilities}${tagInfo}`;
+                    }
+                    
                     return `${name}:
     Description: ${cmd.description}
     Usage: ${prefixes}
@@ -246,7 +343,10 @@ class NLPProcessor {
             if (processedCommand.startsWith('#')) {
                 const commandParts = processedCommand.slice(1).trim().split(' ');
                 const commandName = commandParts[0].toUpperCase();
-                logger.info(`NLP detected command: ${commandName} with input: ${commandParts.slice(1).join(' ')}`);
+                const commandInput = commandParts.slice(1).join(' ');
+                logger.info(`NLP detected command: ${commandName} with input: ${commandInput}`);
+            } else if (processedCommand.startsWith('@')) {
+                logger.info(`NLP detected tag command: ${processedCommand}`);
             }
             
             // Special handling for resumo_config command
@@ -291,47 +391,52 @@ class NLPProcessor {
     }
 
     async buildMessageContext(message) {
-        logger.debug('Building message context');
-        const context = {
-            text: message.body,
-            hasQuotedMsg: message.hasQuotedMsg,
-            quotedMsgId: null,
-            quotedText: null,
-            hasMedia: message.hasMedia,
-            mediaType: message.type,
-            mediaId: null
-        };
-
-        // Get quoted message details if exists
-        if (message.hasQuotedMsg) {
-            try {
-                const quotedMsg = await message.getQuotedMessage();
-                context.quotedMsgId = quotedMsg.id._serialized;
-                context.quotedText = quotedMsg.body;
-                logger.debug('Retrieved quoted message details', {
-                    quotedMsgId: context.quotedMsgId,
-                    quotedText: context.quotedText
-                });
-            } catch (error) {
-                logger.error('Error getting quoted message:', error);
+        try {
+            // Clean the message body if the bot is mentioned
+            let messageBody = message.body;
+            const botNumber = config.CREDENTIALS.BOT_NUMBER;
+            const isBotMentioned = message.mentionedIds && 
+                                  message.mentionedIds.some(id => id === `${botNumber}@c.us`);
+            
+            if (isBotMentioned) {
+                // Remove the bot mention from the message
+                messageBody = messageBody.replace(new RegExp(`@${botNumber}\\s*`, 'i'), '').trim();
             }
-        }
+            
+            const context = {
+                text: messageBody,
+                hasQuotedMsg: message.hasQuotedMsg || false,
+                hasMedia: message.hasMedia || false
+            };
 
-        // Get media details if exists
-        if (message.hasMedia) {
-            try {
-                const media = await message.downloadMedia();
+            // Add quoted message info if available
+            if (message.hasQuotedMsg) {
+                try {
+                    const quotedMsg = await message.getQuotedMessage();
+                    context.quotedMsgId = quotedMsg.id._serialized;
+                    context.quotedText = quotedMsg.body;
+                    
+                    // Add media info for quoted message
+                    if (quotedMsg.hasMedia) {
+                        context.quotedMediaType = quotedMsg.type;
+                        context.quotedMediaId = quotedMsg.id._serialized;
+                    }
+                } catch (error) {
+                    logger.error('Error getting quoted message:', error);
+                }
+            }
+
+            // Add media info if available
+            if (message.hasMedia) {
+                context.mediaType = message.type;
                 context.mediaId = message.id._serialized;
-                logger.debug('Retrieved media details', {
-                    mediaId: context.mediaId,
-                    mediaType: context.mediaType
-                });
-            } catch (error) {
-                logger.error('Error getting media:', error);
             }
-        }
 
-        return JSON.stringify(context);
+            return JSON.stringify(context);
+        } catch (error) {
+            logger.error('Error building message context:', error);
+            return JSON.stringify({ text: message.body });
+        }
     }
 }
 

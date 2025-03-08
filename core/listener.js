@@ -19,6 +19,12 @@ function setupListeners(client) {
         // Set startup time when initializing
         startupTime = Date.now();
         
+        // Make sure NLP processor is available globally
+        if (!global.nlpProcessor) {
+            logger.debug('Initializing NLP processor');
+            global.nlpProcessor = nlpProcessor;
+        }
+        
         // Set up message event handler
         client.on('message', async (message) => {
             // Skip messages from before bot startup
@@ -63,7 +69,25 @@ function setupListeners(client) {
                     return;
                 }
 
-                // Check for traditional command syntax first (messages starting with # or !)
+                // Check if the bot is mentioned
+                const botNumber = config.CREDENTIALS.BOT_NUMBER;
+                const isBotMentioned = message.mentionedIds && 
+                                      message.mentionedIds.some(id => id === `${botNumber}@c.us`);
+                
+                if (isBotMentioned) {
+                    logger.debug('Bot was mentioned, processing with command manager', {
+                        messageBody: message.body,
+                        mentions: message.mentionedIds
+                    });
+                    await chat.sendStateTyping();
+                    const result = await commandManager.processCommand(message);
+                    if (!result) {
+                        logger.debug('Command processing failed for bot mention');
+                    }
+                    return;
+                }
+
+                // Check for traditional command syntax (messages starting with # or !)
                 if (message.body.startsWith('#') || message.body.startsWith('!')) {
                     logger.debug('Processing traditional command', { 
                         prefix: message.body[0],
@@ -76,6 +100,36 @@ function setupListeners(client) {
                     }
                     return;
                 }
+                
+                // Check for tag commands (messages containing @tag)
+                // First check if the message contains an @ symbol
+                if (message.body.includes('@')) {
+                    // Extract all potential tags from the message (words starting with @)
+                    const potentialTags = message.body.split(/\s+/).filter(word => word.startsWith('@') && word.length > 1);
+                    
+                    if (potentialTags.length > 0) {
+                        logger.debug('Found potential tag(s) in message', { potentialTags });
+                        
+                        // Check if any of the potential tags are valid before showing typing indicator
+                        const { isValidTag, validTag } = await commandManager.checkValidTag(potentialTags, chat);
+                        
+                        if (isValidTag) {
+                            logger.debug('Processing valid tag command', { 
+                                tag: validTag,
+                                command: message.body 
+                            });
+                            await chat.sendStateTyping();
+                            const result = await commandManager.processCommand(message, validTag);
+                            if (!result) {
+                                logger.debug('Tag command processing failed');
+                            }
+                            return;
+                        } else {
+                            // If no valid tags found, just log and continue to NLP processing
+                            logger.debug('No valid tags found in message, continuing to NLP processing');
+                        }
+                    }
+                }
 
                 // Try NLP processing
                 try {
@@ -84,7 +138,28 @@ function setupListeners(client) {
                     if (nlpResult) {
                         logger.debug('NLP produced a command', { nlpResult });
                         await chat.sendStateTyping();
-                        // Create a new message object while preserving the original message's properties and methods
+                        
+                        // Special handling for tag commands from NLP
+                        if (nlpResult.startsWith('@')) {
+                            logger.debug('NLP produced a tag command', { tag: nlpResult });
+                            // Extract just the tag part (first word) from the NLP result
+                            const tagOnly = nlpResult.split(/\s+/)[0];
+                            logger.debug('Extracted tag from NLP result', { 
+                                originalResult: nlpResult, 
+                                extractedTag: tagOnly 
+                            });
+                            
+                            // Create a new message object with the tag as the body
+                            const tagMessage = Object.create(
+                                Object.getPrototypeOf(message),
+                                Object.getOwnPropertyDescriptors(message)
+                            );
+                            // Pass only the tag as the input parameter to the command
+                            await commandManager.processCommand(tagMessage, tagOnly);
+                            return;
+                        }
+                        
+                        // For other commands, create a new message with the NLP result as the body
                         const nlpMessage = Object.create(
                             Object.getPrototypeOf(message),
                             Object.getOwnPropertyDescriptors(message)

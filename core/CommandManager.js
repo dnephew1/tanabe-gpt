@@ -25,7 +25,7 @@ class CommandManager {
             hasMentions: mentions.length > 0 
         });
         
-        // Check if the bot was mentioned
+        // Check if the bot is mentioned
         if (mentions && mentions.length > 0) {
             try {
                 const botNumber = config.CREDENTIALS.BOT_NUMBER;
@@ -33,8 +33,12 @@ class CommandManager {
                 
                 if (isBotMentioned) {
                     logger.debug('Bot was mentioned, processing with NLP');
+                    // Remove the bot mention from the message body for cleaner NLP processing
+                    const cleanedBody = trimmedBody.replace(new RegExp(`@${botNumber}\\s*`, 'i'), '').trim();
+                    
+                    // Process the cleaned message with NLP
                     const nlpResult = await nlpProcessor.processNaturalLanguage({ 
-                        body: trimmedBody,
+                        body: cleanedBody,
                         hasQuotedMsg: false,
                         mentionedIds: mentions,
                         getChat: async () => ({ isGroup: true }),
@@ -47,16 +51,62 @@ class CommandManager {
                         const command = config.COMMANDS[commandName.toUpperCase()];
                         
                         if (command) {
+                            logger.debug('NLP detected command from bot mention', {
+                                command: commandName.toUpperCase(),
+                                input: inputParts.join(' ')
+                            });
                             return {
                                 command: { ...command, name: commandName.toUpperCase() },
                                 input: inputParts.join(' ')
                             };
                         }
+                    } else if (nlpResult && nlpResult.startsWith('@')) {
+                        // Handle tag commands from NLP
+                        logger.debug('NLP detected tag command from bot mention', { tag: nlpResult });
+                        const tagCommand = config.COMMANDS.TAG;
+                        if (tagCommand) {
+                            // Use the NLP result as the input, not the original message
+                            return { command: { ...tagCommand, name: 'TAG' }, input: nlpResult };
+                        }
                     }
+                    
+                    // If NLP didn't produce a valid result, return null
+                    return { command: null, input: '' };
                 }
             } catch (error) {
                 logger.error('Error processing NLP command:', error);
             }
+        }
+        
+        // Check if the message is a tag command (but not a bot mention)
+        if (trimmedBody.startsWith('@') && !mentions.length) {
+            const tagPart = trimmedBody.split(' ')[0].toLowerCase();
+            logger.debug('Detected potential tag command', { tag: tagPart });
+            
+            // Check if it's a valid tag
+            const tagCommand = config.COMMANDS.TAG;
+            if (tagCommand) {
+                // Check special tags (case insensitive)
+                const specialTags = Object.keys(tagCommand.specialTags).map(t => t.toLowerCase());
+                if (specialTags.includes(tagPart)) {
+                    logger.debug('Found matching special tag', { tag: tagPart });
+                    return { command: { ...tagCommand, name: 'TAG' }, input: trimmedBody };
+                }
+                
+                // Check group-specific tags for each group
+                for (const [groupName, groupTags] of Object.entries(tagCommand.groupTags)) {
+                    const groupTagKeys = Object.keys(groupTags).map(t => t.toLowerCase());
+                    if (groupTagKeys.includes(tagPart)) {
+                        logger.debug('Found matching group tag', { tag: tagPart, group: groupName });
+                        return { command: { ...tagCommand, name: 'TAG' }, input: trimmedBody };
+                    }
+                }
+            }
+            
+            // If we get here, it's a tag but not one we recognize
+            // Don't return a command for invalid tags
+            logger.debug('Tag not recognized in configuration', { tag: tagPart });
+            return { command: null, input: '' };
         }
 
         // Check each command's prefixes
@@ -229,7 +279,7 @@ class CommandManager {
     }
 
     // Main command processing function
-    async processCommand(message) {
+    async processCommand(message, nlpInput = null) {
         try {
             // Parse the command from the message
             const mentions = message.mentionedIds || [];
@@ -240,11 +290,14 @@ class CommandManager {
             const chat = await message.getChat();
             const contact = await message.getContact();
             
-            logger.info(`Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${input}`);
+            // Use NLP input if provided (for tag commands)
+            const finalInput = nlpInput || input;
+            
+            logger.info(`Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${finalInput}`);
             
             logger.debug('Processing command', {
                 command: command.name,
-                input,
+                input: finalInput,
                 chatId: message.chat?.id?._serialized,
                 hasQuoted: message.hasQuotedMsg,
                 hasMedia: message.hasMedia
@@ -277,8 +330,8 @@ class CommandManager {
             }
 
             try {
-                // Execute the command
-                await handler(message, command, input);
+                // Execute the command with the final input
+                await handler(message, command, finalInput);
                 return true;
             } catch (error) {
                 logger.error(`Error executing command ${command.name}:`, error);
@@ -290,6 +343,55 @@ class CommandManager {
         } catch (error) {
             logger.error('Error processing command:', error);
             return false;
+        }
+    }
+
+    // Check if a tag is valid (exists in config)
+    async checkValidTag(potentialTags, chat) {
+        try {
+            // Get the tag command configuration
+            const tagCommand = config.COMMANDS.TAG;
+            if (!tagCommand) {
+                return { isValidTag: false, validTag: null };
+            }
+
+            // Get all special tags (case insensitive)
+            const specialTags = Object.keys(tagCommand.specialTags).map(t => t.toLowerCase());
+            
+            // Get group-specific tags if this is a group chat
+            let groupTags = [];
+            if (chat.isGroup && tagCommand.groupTags[chat.name]) {
+                groupTags = Object.keys(tagCommand.groupTags[chat.name]).map(t => t.toLowerCase());
+            }
+            
+            // Check each potential tag against our valid tags
+            for (const tag of potentialTags) {
+                const lowerTag = tag.toLowerCase();
+                
+                // Check if it's a special tag
+                if (specialTags.includes(lowerTag)) {
+                    logger.debug('Found valid special tag', { tag });
+                    return { isValidTag: true, validTag: tag };
+                }
+                
+                // Check if it's a group-specific tag
+                if (groupTags.includes(lowerTag)) {
+                    logger.debug('Found valid group tag', { tag, group: chat.name });
+                    return { isValidTag: true, validTag: tag };
+                }
+            }
+            
+            // If we get here, no valid tags were found
+            logger.debug('No valid tags found', { 
+                potentialTags,
+                availableSpecialTags: Object.keys(tagCommand.specialTags),
+                availableGroupTags: chat.isGroup && tagCommand.groupTags[chat.name] ? 
+                    Object.keys(tagCommand.groupTags[chat.name]) : []
+            });
+            return { isValidTag: false, validTag: null };
+        } catch (error) {
+            logger.error('Error checking valid tag:', error);
+            return { isValidTag: false, validTag: null };
         }
     }
 }
