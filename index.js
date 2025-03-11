@@ -331,6 +331,11 @@ async function initializeBot() {
         logger.debug('Command handlers registered successfully');
         logger.debug('All listeners set up successfully');
 
+        // Initialize message logging
+        logger.debug('Initializing message logging...');
+        initializeMessageLog();
+        logger.debug('Message logging initialized successfully');
+
         // Initialize Twitter monitor if enabled
         try {
             logger.debug('Initializing Twitter monitor...');

@@ -29,9 +29,9 @@ function getDocumentSettings() {
 
 async function extractTextFromPDF(filePath) {
     try {
-        // Temporarily redirect console.warn to suppress PDF warnings
-        const originalWarn = console.warn;
-        console.warn = function(msg) {
+        // Temporarily redirect logger.warn to suppress PDF warnings
+        const originalWarn = logger.warn;
+        logger.warn = function(msg) {
             // Only suppress TT warnings from pdf-parse
             if (!msg.includes('TT: undefined function')) {
                 originalWarn.apply(console, arguments);
@@ -53,8 +53,8 @@ async function extractTextFromPDF(filePath) {
             
             return text || 'No readable text found in PDF';
         } finally {
-            // Restore original console.warn
-            console.warn = originalWarn;
+            // Restore original logger.warn
+            logger.warn = originalWarn;
         }
     } catch (error) {
         logger.error('Error extracting text from PDF:', error);
