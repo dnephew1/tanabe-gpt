@@ -1,5 +1,5 @@
 const axios = require('axios');
-const config = require('../config');
+const config = require('../configs');
 const logger = require('./logger');
 const { runCompletion } = require('./openaiUtils');
 const DESENHO = require('../prompts/desenho');

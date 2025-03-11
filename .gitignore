@@ -17,10 +17,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-config.js
 .wwebjs_auth
 .wwebjs_cache
-backup_index.js
 package-lock.json
 commands.txt
 .cursorignore
@@ -29,8 +27,8 @@ tanabe-gpt.log
 tanabe_monitor.py
 tanabe-gpt.service
 start.sh
-config_copy.js
-personalities.js
 tanabe-monitor.service
 setup.sh
-periodic_summary_config.js
+.wwebjs_auth_test
+.wwebjs_auth_main
+/backup

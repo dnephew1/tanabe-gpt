@@ -5,7 +5,7 @@ async function deleteFile(filePath) {
     try {
         await fsPromises.unlink(filePath);
     } catch (error) {
-        console.error(`Error deleting file:`, error.message);
+        logger.error(`Error deleting file:`, error.message);
     }
 }
 

@@ -1,6 +1,5 @@
 const fs = require('fs').promises;
-const path = require('path');
-const config = require('../config');
+const config = require('../configs');
 
 // Log levels
 const LOG_LEVELS = {
@@ -141,7 +140,10 @@ async function notifyAdmin(message) {
 // Core logging function
 async function log(level, message, error = null, shouldNotifyAdmin = false) {
     // Check if this log level is enabled in console settings
-    if (!config.SYSTEM?.CONSOLE_LOG_LEVELS?.[level]) {
+    // Only proceed if the log level is explicitly set to true
+    if (!config.SYSTEM?.CONSOLE_LOG_LEVELS || 
+        config.SYSTEM.CONSOLE_LOG_LEVELS[level] !== true) {
+        // Skip logging for this level
         return;
     }
 
@@ -174,7 +176,8 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
     }
 
     // Check if this log level should be sent to admin
-    if (shouldNotifyAdmin && config.SYSTEM?.ADMIN_NOTIFICATION_LEVELS?.[level]) {
+    if (shouldNotifyAdmin && config.SYSTEM?.NOTIFICATION_LEVELS && 
+        config.SYSTEM.NOTIFICATION_LEVELS[level] === true) {
         // Use simplified format for admin notifications
         const adminMessage = formatAdminMessage(level, message, error);
         await notifyAdmin(adminMessage);
@@ -184,12 +187,15 @@ async function log(level, message, error = null, shouldNotifyAdmin = false) {
 // Convenience methods for different log levels
 const logger = {
     error: (message, error = null) => log(LOG_LEVELS.ERROR, message, error, true),
-    warn: (message) => log(LOG_LEVELS.WARN, message, null, true),
+    warn: (message, error = null, shouldNotifyAdmin = true) => log(LOG_LEVELS.WARN, message, error, shouldNotifyAdmin),
     info: (message) => log(LOG_LEVELS.INFO, message, null, true),
     debug: (message, obj = null) => {
-        if (!config.SYSTEM?.CONSOLE_LOG_LEVELS?.DEBUG) {
+        // Only proceed if DEBUG is explicitly set to true
+        if (!config.SYSTEM?.CONSOLE_LOG_LEVELS || 
+            config.SYSTEM.CONSOLE_LOG_LEVELS.DEBUG !== true) {
             return;
         }
+        
         if (obj) {
             // If an object is provided, log both the message and the object
             log(LOG_LEVELS.DEBUG, message);
@@ -204,15 +210,31 @@ const logger = {
     },
     summary: (message) => log(LOG_LEVELS.SUMMARY, message, null, true),
     prompt: (message, promptText) => {
-        if (config.SYSTEM?.CONSOLE_LOG_LEVELS?.[LOG_LEVELS.PROMPT]) {
-            console.log('\n[PROMPT]', message);
-            console.log('------- PROMPT START -------');
-            console.log(promptText);
-            console.log('-------- PROMPT END --------\n');
+        // Only proceed if PROMPT is explicitly set to true
+        if (!config.SYSTEM?.CONSOLE_LOG_LEVELS || 
+            config.SYSTEM.CONSOLE_LOG_LEVELS.PROMPT !== true) {
+            return;
         }
-        if (config.SYSTEM?.ADMIN_NOTIFICATION_LEVELS?.[LOG_LEVELS.PROMPT]) {
+        
+        // Handle undefined promptText
+        if (promptText === undefined) {
+            console.warn(formatLogWithTimestamp('WARN', 'Undefined prompt text received'));
+            promptText = 'UNDEFINED PROMPT';
+        }
+        
+        const promptHeader = formatLogWithTimestamp(LOG_LEVELS.PROMPT, message);
+        console.log(promptHeader);
+        console.log(promptText);
+        
+        // Also write to log file
+        writeToLogFile(promptHeader)
+            .then(() => writeToLogFile(promptText))
+            .catch(err => console.error('Error writing prompt to log file:', err));
+        
+        if (config.SYSTEM?.NOTIFICATION_LEVELS && 
+            config.SYSTEM.NOTIFICATION_LEVELS.PROMPT === true) {
             notifyAdmin(`[PROMPT] ${message}\n\n${promptText}`).catch(error => 
-                console.error('Failed to notify admin of prompt:', error)
+                console.error('Failed to notify admin of prompt:', formatError(error))
             );
         }
     },

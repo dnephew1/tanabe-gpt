@@ -10,13 +10,15 @@ process.on('warning', (warning) => {
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const config = require('./config');
+const config = require('./configs');
 const { setupListeners } = require('./core/listener');
 const { runPeriodicSummary } = require('./commands/periodicSummary');
 const { initializeMessageLog } = require('./utils/messageLogger');
 const { initializeTwitterMonitor } = require('./commands/twitterMonitor');
 const commandManager = require('./core/CommandManager');
 const logger = require('./utils/logger');
+const path = require('path');
+const fs = require('fs');
 
 // Add global error handlers
 process.on('uncaughtException', (error) => {
@@ -195,12 +197,10 @@ async function scheduleNextSummary() {
 // Initialize bot components
 async function initializeBot() {
     try {
-        console.log('Starting bot initialization...');
         logger.info('Starting bot initialization...');
 
         // Clear cache if enabled
         if (config.SYSTEM?.ENABLE_STARTUP_CACHE_CLEARING) {
-            console.log('Clearing cache...');
             logger.debug('Cache clearing is enabled, performing cleanup...');
             const { performCacheClearing } = require('./commands/cacheManagement');
             const { clearedFiles } = await performCacheClearing();
@@ -210,12 +210,25 @@ async function initializeBot() {
         }
 
         // Initialize WhatsApp client
-        console.log('Creating WhatsApp client...');
         logger.debug('Starting WhatsApp client initialization...');
+        
+        // Determine auth path and client ID
+        const authPath = process.env.USE_AUTH_DIR || path.join(__dirname, '.wwebjs_auth_main');
+        const clientId = process.env.USE_CLIENT_ID || 'tanabe-gpt-client';
+        logger.debug(`Using authentication path: ${authPath} with client ID: ${clientId}`);
+        
+        // Check if the session folder exists
+        const sessionFolder = path.join(authPath, `session-${clientId}`);
+        if (fs.existsSync(sessionFolder)) {
+            logger.debug(`Found existing session folder: ${sessionFolder}`);
+        } else {
+            logger.warn(`Session folder not found: ${sessionFolder}. A new one will be created.`);
+        }
+        
         const client = new Client({
             authStrategy: new LocalAuth({
-                clientId: 'tanabe-gpt-client',
-                dataPath: './.wwebjs_auth'
+                clientId: clientId,
+                dataPath: authPath
             }),
             puppeteer: {
                 headless: true,
@@ -228,36 +241,35 @@ async function initializeBot() {
                     '--no-zygote',
                     '--single-process',
                     '--disable-gpu'
-                ],
+                ]
             },
             restartOnAuthFail: true,
             qrMaxRetries: 5,
-            qrTimeoutMs: 60000
+            qrTimeoutMs: 60000,
+            authTimeoutMs: 60000,
+            takeoverOnConflict: true,
+            takeoverTimeoutMs: 60000
         });
 
         // Store client globally for use in other modules
         global.client = client;
-        console.log('Storing client globally...');
         logger.debug('Storing client globally...');
 
         // Set up QR code handling
         let qrAttempts = 0;
         client.on('qr', (qr) => {
             qrAttempts++;
-            console.log(`QR Code received (attempt ${qrAttempts}/5), scan to authenticate.`);
             logger.info(`QR Code received (attempt ${qrAttempts}/5), scan to authenticate:`);
             qrcode.generate(qr, { small: true });
             
             // Log additional instructions
             if (qrAttempts === 1) {
-                console.log('To authenticate: Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device');
                 logger.info('To authenticate: Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device');
             }
         });
 
         // Set up detailed event logging
         client.on('loading_screen', (percent, message) => {
-            console.log(`WhatsApp loading: ${percent}% - ${message}`);
             logger.debug('WhatsApp loading screen:', {
                 percent,
                 message
@@ -265,21 +277,18 @@ async function initializeBot() {
         });
 
         client.on('authenticated', () => {
-            console.log('WhatsApp authenticated successfully!');
             logger.debug('Client authenticated successfully');
             qrAttempts = 0;
             logger.info('WhatsApp authentication successful! Session will be saved for future use.');
         });
 
         client.on('auth_failure', (msg) => {
-            console.error('Authentication failed:', msg);
             logger.error('Authentication failed:', msg);
             logger.info('Please try again. If the problem persists, delete the .wwebjs_auth directory and restart.');
             throw new Error(`Authentication failed: ${msg}`);
         });
 
         client.on('disconnected', (reason) => {
-            console.error('WhatsApp disconnected:', reason);
             logger.error('Client was disconnected:', reason);
             throw new Error(`WhatsApp disconnected: ${reason}`);
         });
@@ -292,7 +301,6 @@ async function initializeBot() {
             }, 120000); // 2 minutes timeout
             
             client.on('ready', () => {
-                console.log('WhatsApp client is ready!');
                 logger.debug('WhatsApp client is ready and authenticated!');
                 clearTimeout(timeout); // Clear the timeout
                 resolve(); // Resolve the promise
@@ -300,67 +308,56 @@ async function initializeBot() {
         });
 
         // Start the client initialization
-        console.log('Starting WhatsApp client and waiting for authentication...');
         logger.debug('Starting WhatsApp client and waiting for authentication...');
         
         // Initialize the client (this starts the authentication process)
         await client.initialize().catch(error => {
-            console.error('Error initializing WhatsApp client:', error);
             logger.error('Error initializing WhatsApp client:', error);
             throw error;
         });
         
         // Wait for the client to be ready (fully authenticated)
-        console.log('Waiting for WhatsApp client to be fully ready...');
+        logger.debug('Waiting for WhatsApp client to be fully ready...');
         await readyPromise;
         
-        console.log('WhatsApp client authenticated and initialized successfully!');
         logger.debug('WhatsApp client authenticated and initialized successfully!');
 
         // Now that we're authenticated and ready, set up the rest of the components
-        console.log('Setting up command handlers and listeners...');
         logger.debug('Setting up command handlers and listeners...');
         
         // Register command handlers
         logger.debug('Registering command handlers...');
         setupListeners(client);
-        console.log('Command handlers registered successfully');
         logger.debug('Command handlers registered successfully');
         logger.debug('All listeners set up successfully');
 
         // Initialize Twitter monitor if enabled
         try {
-            console.log('Initializing Twitter monitor...');
             logger.debug('Initializing Twitter monitor...');
             await initializeTwitterMonitor();
         } catch (error) {
-            console.error('Failed to initialize Twitter monitor:', error);
             logger.error('Failed to initialize Twitter monitor:', error);
             // Continue even if Twitter monitor fails
         }
         
         // Notify admin of startup
         try {
-            console.log('Notifying admin of startup...');
+            logger.debug('Notifying admin of startup...');
             const adminNumber = config.CREDENTIALS.ADMIN_NUMBER;
             if (adminNumber) {
                 const adminChat = await client.getChatById(`${adminNumber}@c.us`);
                 await adminChat.sendMessage('🤖 Bot has been started successfully!');
-                console.log('Admin notified of bot startup');
                 logger.debug('Admin notified of bot startup');
             }
         } catch (error) {
-            console.error('Failed to notify admin of startup:', error);
             logger.error('Failed to notify admin of startup:', error);
             // Continue even if admin notification fails
         }
 
-        console.log('Bot initialization completed successfully!');
         logger.info('Bot initialization completed successfully!');
         return client;
 
     } catch (error) {
-        console.error('Error during bot initialization:', error);
         logger.error('Error during bot initialization:', error);
         throw error;
     }
@@ -369,7 +366,7 @@ async function initializeBot() {
 // Main function
 async function main() {
     try {
-        console.log('Starting bot...');
+        logger.debug('Starting bot...');
         
         // Perform git pull if running in production
         if (process.env.NODE_ENV === 'production') {
@@ -384,40 +381,39 @@ async function main() {
             }
         }
 
-        console.log('Initializing bot...');
+        logger.debug('Initializing bot...');
         // Initialize the bot
         await initializeBot();
-        console.log('Bot initialization completed.');
+        logger.debug('Bot initialization completed.');
     } catch (error) {
-        console.error('CRITICAL ERROR:', error);
         logger.error('Error in main function:', error);
         
         // Provide specific guidance based on the error
         if (error.message && error.message.includes('auth')) {
-            console.log('Authentication error detected. Try the following:');
-            console.log('1. Delete the .wwebjs_auth directory: rm -rf .wwebjs_auth');
-            console.log('2. Restart the bot: node index.js');
-            console.log('3. Scan the QR code with your WhatsApp');
+            logger.error('Authentication error detected. Try the following:');
+            logger.error('1. Delete the .wwebjs_auth directory: rm -rf .wwebjs_auth');
+            logger.error('2. Restart the bot: node index.js');
+            logger.error('3. Scan the QR code with your WhatsApp');
             logger.info('Authentication error detected. Try deleting the .wwebjs_auth directory and restarting the bot.');
         } else if (error.message && error.message.includes('timeout')) {
-            console.log('Timeout error detected. Try the following:');
-            console.log('1. Check your internet connection');
-            console.log('2. Delete the .wwebjs_auth directory: rm -rf .wwebjs_auth');
-            console.log('3. Restart the bot: node index.js');
+            logger.error('Timeout error detected. Try the following:');
+            logger.error('1. Check your internet connection');
+            logger.error('2. Delete the .wwebjs_auth directory: rm -rf .wwebjs_auth');
+            logger.error('3. Restart the bot: node index.js');
         } else if (error.message && error.message.includes('disconnected')) {
-            console.log('WhatsApp disconnected. Try the following:');
-            console.log('1. Check your internet connection');
-            console.log('2. Make sure WhatsApp is running on your phone');
-            console.log('3. Restart the bot: node index.js');
+            logger.error('WhatsApp disconnected. Try the following:');
+            logger.error('1. Check your internet connection');
+            logger.error('2. Make sure WhatsApp is running on your phone');
+            logger.error('3. Restart the bot: node index.js');
         }
         
         // Keep the process alive to see the error
-        console.log('Press Ctrl+C to exit.');
+        logger.error('Press Ctrl+C to exit.');
     }
 }
 
 // Start the bot
 main().catch(error => {
-    console.error('UNHANDLED ERROR IN MAIN:', error);
+    logger.error('UNHANDLED ERROR IN MAIN:', error);
 });
 

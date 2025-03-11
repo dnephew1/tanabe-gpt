@@ -1,4 +1,4 @@
-const config = require('../config');
+const config = require('../configs');
 const { runCompletion } = require('../utils/openaiUtils');
 const { extractLinks, unshortenLink, getPageContent } = require('../utils/linkUtils');
 const { getPromptWithContext } = require('../utils/promptUtils');
@@ -114,7 +114,7 @@ async function handleSpecificMessageCount(message, limit) {
     
     if (isNaN(limit)) {
         return await message.reply('Por favor, forneça um número válido após "#resumo" para definir o limite de mensagens.')
-            .catch(error => console.error('Failed to send message:', error.message));
+            .catch(error => logger.error('Failed to send message:', error.message));
     }
 
     let allValidMessages = [];
@@ -166,7 +166,7 @@ async function handleSpecificMessageCount(message, limit) {
 
     if (messagesToSummarize.length === 0) {
         return await message.reply('Não há mensagens suficientes para gerar um resumo')
-            .catch(error => console.error('Failed to send message:', error.message));
+            .catch(error => logger.error('Failed to send message:', error.message));
     }
 
     // Log if we couldn't get enough messages
@@ -193,14 +193,16 @@ async function handleSpecificMessageCount(message, limit) {
 
     const result = await runCompletion(prompt, 1);
     return await message.reply(result.trim())
-        .catch(error => console.error('Failed to send message:', error.message));
+        .catch(error => logger.error('Failed to send message:', error.message));
 }
 
 async function handleResumo(message, command, input) {
     logger.debug('handleResumo activated', {
         hasInput: !!input,
         input: input,
-        hasQuoted: message.hasQuotedMsg
+        hasQuoted: message.hasQuotedMsg,
+        hasMedia: message.hasMedia,
+        messageType: message.type
     });
 
     try {
@@ -208,6 +210,32 @@ async function handleResumo(message, command, input) {
         if (message.hasQuotedMsg) {
             logger.debug('Processing quoted message');
             return await handleQuotedMessage(message, command);
+        }
+
+        // Check if the message has an attachment (document)
+        if (message.hasMedia && message.type === 'document') {
+            logger.debug('Processing attached document');
+            try {
+                const text = await downloadAndProcessDocument(message);
+                
+                // Get prompt template for document summarization
+                const prompt = await getPromptWithContext(message, config, 'RESUMO', 'DOCUMENT_SUMMARY', {
+                    text
+                });
+                
+                const summary = await runCompletion(prompt, 0.7);
+                const response = await message.reply(summary);
+                
+                // Handle auto-deletion if configured
+                await handleAutoDelete(response, command);
+                await handleAutoDelete(message, command);
+                return;
+            } catch (error) {
+                logger.error('Error processing document:', error);
+                const errorMessage = await message.reply(command.errorMessages.documentError);
+                await handleAutoDelete(errorMessage, command, true);
+                throw error;
+            }
         }
 
         // If there's input after #resumo, try to parse it as a number first

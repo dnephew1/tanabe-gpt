@@ -1,4 +1,4 @@
-const config = require('../config');
+const config = require('../configs');
 const { runCompletion } = require('../utils/openaiUtils');
 const { performCacheClearing } = require('./cacheManagement');
 const logger = require('../utils/logger');
@@ -7,11 +7,47 @@ const { runPeriodicSummary } = require('./periodicSummary');
 const { getCurrentApiKey } = require('./twitterMonitor');
 const axios = require('axios');
 
+// Runtime configuration that can be modified during execution
+const runtimeConfig = {
+    nlpEnabled: true // NLP processing is enabled by default
+};
+
 // Helper function to check if message is from admin chat
 async function isAdminChat(message) {
     const chat = await message.getChat();
     const contact = await message.getContact();
     return contact.id._serialized === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us` && chat.isGroup === false;
+}
+
+// Helper function to check if user is admin or moderator
+async function isAdminOrModerator(message) {
+    try {
+        // Check if direct message from admin
+        const contact = await message.getContact();
+        if (contact.id._serialized === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`) {
+            return true;
+        }
+        
+        // Check if group message from admin or moderator
+        const chat = await message.getChat();
+        if (chat.isGroup) {
+            // Get participant info
+            const participant = chat.participants.find(p => p.id._serialized === contact.id._serialized);
+            if (participant && (participant.isAdmin || participant.isSuperAdmin)) {
+                return true;
+            }
+            
+            // Check if user is in moderators list (if configured)
+            if (config.MODERATORS && Array.isArray(config.MODERATORS)) {
+                return config.MODERATORS.includes(contact.id.user);
+            }
+        }
+        
+        return false;
+    } catch (error) {
+        logger.error('Error checking admin/moderator status:', error);
+        return false;
+    }
 }
 
 async function handleCacheClear(message) {
@@ -177,8 +213,52 @@ Evaluation Result: ${evaluation.trim()}`;
     }
 }
 
+// Handle configuration commands
+async function handleConfig(message, command, input) {
+    logger.debug('Config command activated', { input });
+    
+    // Check if user is admin or moderator
+    if (!await isAdminOrModerator(message)) {
+        logger.debug('Config command rejected: not admin or moderator');
+        return;
+    }
+    
+    // Parse the input to get the configuration option and value
+    const parts = input.trim().split(/\s+/);
+    if (parts.length < 2) {
+        await message.reply('Usage: #config [option] [value]\nAvailable options: nlp');
+        return;
+    }
+    
+    const option = parts[0].toLowerCase();
+    const value = parts[1].toLowerCase();
+    
+    // Handle different configuration options
+    switch (option) {
+        case 'nlp':
+            // Toggle NLP processing
+            if (value === 'on' || value === 'true' || value === 'enable') {
+                runtimeConfig.nlpEnabled = true;
+                await message.reply('NLP processing enabled');
+                logger.info('NLP processing enabled by admin command');
+            } else if (value === 'off' || value === 'false' || value === 'disable') {
+                runtimeConfig.nlpEnabled = false;
+                await message.reply('NLP processing disabled');
+                logger.info('NLP processing disabled by admin command');
+            } else {
+                await message.reply('Invalid value for nlp. Use "on" or "off"');
+            }
+            break;
+            
+        default:
+            await message.reply(`Unknown configuration option: ${option}\nAvailable options: nlp`);
+    }
+}
+
 module.exports = {
     handleCacheClear,
     handleTwitterDebug,
-    handleForceSummary
+    handleForceSummary,
+    handleConfig,
+    runtimeConfig
 }; 

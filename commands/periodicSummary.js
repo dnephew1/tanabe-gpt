@@ -1,4 +1,4 @@
-const config = require('../config');
+const config = require('../configs');
 const { runCompletion } = require('../utils/openaiUtils');
 const logger = require('../utils/logger');
 

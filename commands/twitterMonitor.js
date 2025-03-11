@@ -1,4 +1,4 @@
-const config = require('../config');
+const config = require('../configs');
 const { runCompletion } = require('../utils/openaiUtils');
 const axios = require('axios');
 const logger = require('../utils/logger');
@@ -11,6 +11,9 @@ let apiUsageCache = {
     currentKey: 'primary',
     lastCheck: null
 };
+
+// Get group names from environment variables
+const GROUP_LF = process.env.GROUP_LF;
 
 async function getKeyUsage(key, name) {
     try {
@@ -167,7 +170,7 @@ async function initializeTwitterMonitor() {
             const targetGroup = chats.find(chat => chat.name === config.TWITTER.TARGET_GROUP);
             
             if (!targetGroup) {
-                logger.error('Target group not found, skipping Twitter monitor initialization');
+                logger.error(`Target group "${config.TWITTER.TARGET_GROUP}" not found, skipping Twitter monitor initialization`);
                 return;
             }
 
@@ -237,7 +240,17 @@ async function initializeTwitterMonitor() {
                 }
                 
                 const waitTime = waitTimes[attempts];
-                logger.warn(`Twitter API rate limit reached (attempt ${attempts}/${maxAttempts}). Waiting ${waitTime/60000} minutes before retry...`);
+                // Only notify admin on the last attempt
+                const isLastAttempt = attempts === maxAttempts - 1;
+                
+                if (isLastAttempt) {
+                    // Use error to ensure admin notification
+                    logger.error(`Twitter API rate limit reached (final attempt ${attempts+1}/${maxAttempts}). Waiting ${waitTime/60000} minutes before final retry...`);
+                } else {
+                    // Use custom warn function that doesn't notify admin
+                    logger.warn(`Twitter API rate limit reached (attempt ${attempts+1}/${maxAttempts}). Waiting ${waitTime/60000} minutes before retry...`, null, false);
+                }
+                
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             } else {
                 // If it's not a rate limit error, log and return

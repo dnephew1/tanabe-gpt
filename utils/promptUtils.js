@@ -4,6 +4,9 @@ const GROUP_PERSONALITIES = require('../prompts/personalities');
 const RESUMO = require('../prompts/resumo');
 const DESENHO = require('../prompts/desenho');
 
+// Get group names from environment variables
+const GROUP_LF = process.env.GROUP_LF;
+
 /**
  * Get a prompt template with group personality
  * @param {Object} config - The application configuration
@@ -31,15 +34,17 @@ function getPrompt(config, commandName, promptName, groupName = null) {
     const command = config.COMMANDS[commandName];
     let personality = '';
     
-    // Convert direct message to proper format for admin chat
-    if (groupName === null && command.permissions?.allowedIn?.includes(config.CREDENTIALS.ADMIN_NUMBER + '@c.us')) {
-        groupName = config.CREDENTIALS.ADMIN_NUMBER + '@c.us';
-    }
+    // Check if this is the admin chat
+    const adminNumber = config.CREDENTIALS.ADMIN_NUMBER;
+    const isAdminChat = groupName === null || 
+                       groupName === `${adminNumber}@c.us` || 
+                       (typeof groupName === 'string' && groupName.includes(adminNumber));
     
-    // Handle admin chat specially - always use Leorogeriocosta facebook personality
-    if (groupName === config.CREDENTIALS.ADMIN_NUMBER + '@c.us') {
-        if (command.useGroupPersonality && GROUP_PERSONALITIES['Leorogeriocosta facebook']) {
-            personality = GROUP_PERSONALITIES['Leorogeriocosta facebook'];
+    // For admin chat, always use GROUP_LF personality
+    if (isAdminChat) {
+        logger.debug(`Using ${GROUP_LF} personality for admin chat`);
+        if (command.useGroupPersonality && GROUP_PERSONALITIES[GROUP_LF]) {
+            personality = GROUP_PERSONALITIES[GROUP_LF];
         }
     } else if (command.useGroupPersonality && groupName && GROUP_PERSONALITIES[groupName]) {
         // Handle regular group personality

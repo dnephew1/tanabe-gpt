@@ -1,0 +1,20 @@
+{
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "details": [
+    {
+      "name": "ChatGPT Basic",
+      "result": "PASSED"
+    },
+    {
+      "name": "ChatGPT with Quote",
+      "result": "PASSED"
+    },
+    {
+      "name": "ChatGPT with Personality and History",
+      "result": "PASSED",
+      "details": "Personality: Yes, Message History: Yes, Prompt Length: 9725 chars"
+    }
+  ]
+}

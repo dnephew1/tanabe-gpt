@@ -1,5 +1,5 @@
 const { MessageMedia } = require('whatsapp-web.js');
-const config = require('../config');
+const config = require('../configs');
 const logger = require('../utils/logger');
 const { handleAutoDelete } = require('../utils/messageUtils');
 const { transcribeAudio } = require('../utils/audioUtils');

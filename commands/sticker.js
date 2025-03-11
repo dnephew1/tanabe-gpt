@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const config = require('../config');
+const config = require('../configs');
 const { handleAutoDelete } = require('../utils/messageUtils');
 const logger = require('../utils/logger');
 const { MessageMedia } = require('whatsapp-web.js');

@@ -1,10 +1,14 @@
-const config = require('../config');
+const config = require('../configs');
 const logger = require('../utils/logger');
 const { handleAutoDelete } = require('../utils/messageUtils');
 const { runCompletion } = require('../utils/openaiUtils');
 const { extractLinks, unshortenLink, getPageContent } = require('../utils/linkUtils');
-const { scrapeNews, searchNews, translateToPortuguese } = require('../utils/newsUtils');
+const { scrapeNews, searchNews, translateToPortuguese, scrapeNews2 } = require('../utils/newsUtils');
 const RESUMO = require('../prompts/resumo');
+
+// Get group and member names from environment variables
+const GROUP_LF = process.env.GROUP_LF;
+const MEMBER_LF10 = process.env.MEMBER_LF10;
 
 async function handleAyubLinkSummary(message) {
     logger.debug('handleAyubLinkSummary activated');
@@ -17,11 +21,11 @@ async function handleAyubLinkSummary(message) {
     
     // Check conditions:
     // 1. Admin's links are only summarized in admin DM chat
-    // 2. Ayub's links are only summarized in 'Leorogeriocosta facebook' group
+    // 2. Ayub's links are only summarized in 'GROUP_LF' group
     const isAdminInDM = contactNumber === adminNumber && 
                        chat.isGroup === false;
-    const isAyubInTargetGroup = chat.name === 'Leorogeriocosta facebook' && 
-                               contact.name === 'Ayub';
+    const isAyubInTargetGroup = chat.name === GROUP_LF && 
+                                contact.name === MEMBER_LF10;
     
     logger.debug('Link summary check', {
         isAdminInDM,
@@ -110,7 +114,7 @@ async function handleAyubNewsSticker(message, command) {
         const response = await message.reply(reply);
         await handleAutoDelete(response, command);
     } catch (error) {
-        console.error('[ERROR] Error in handleAyubNewsSticker:', error.message);
+        logger.error('[ERROR] Error in handleAyubNewsSticker:', error.message);
         const errorMessage = await message.reply(command.errorMessages.error);
         await handleAutoDelete(errorMessage, command, true);
     }
@@ -149,33 +153,87 @@ async function handleAyubNewsSearch(message, command, searchTerm) {
         const response = await message.reply(reply);
         await handleAutoDelete(response, command);
     } catch (error) {
-        console.error('[ERROR] Error in handleAyubNewsSearch:', error.message);
+        logger.error('[ERROR] Error in handleAyubNewsSearch:', error.message);
         const errorMessage = await message.reply(command.errorMessages.error);
         await handleAutoDelete(errorMessage, command, true);
     }
 }
 
-const handleAyub = async (message, command, input) => {
-    // Convert input string to array if it's not already
-    const inputArray = typeof input === 'string' ? input.split(' ') : input;
-    
-    logger.debug('Processing Ayub command', {
-        input,
-        inputArray,
-        hasMedia: message.hasMedia,
-        type: message.type
-    });
+// Handle AYUB_NEWS command
+async function handleAyubNews(msg, input) {
+    // ... existing code ...
+}
 
-    // If no input or empty input, show latest news
-    if (!input || input.trim() === '') {
-        return await handleAyubNewsSticker(message, command);
+// Handle AYUB_NEWS_FUT command for football news
+async function handleAyubNewsFut(msg) {
+    try {
+        logger.debug('Handling AYUB_NEWS_FUT command');
+        const news = await scrapeNews2();
+        
+        if (news.length === 0) {
+            await msg.reply('Não foi possível encontrar notícias de futebol no momento.');
+            return;
+        }
+        
+        let reply = '*🏆 Últimas Notícias de Futebol 🏆*\n\n';
+        
+        news.forEach((item, index) => {
+            reply += `*${index + 1}. ${item.title}*\n`;
+            if (item.summary) {
+                reply += `${item.summary}\n`;
+            }
+            reply += `${item.link}\n\n`;
+        });
+        
+        await msg.reply(reply);
+        logger.debug('Football news sent successfully');
+    } catch (error) {
+        logger.error('Error handling AYUB_NEWS_FUT command:', error);
+        await msg.reply('Ocorreu um erro ao buscar notícias de futebol.');
     }
+}
 
-    // If there's any input, treat it as a search term
-    return await handleAyubNewsSearch(message, command, input.trim());
+const handleAyub = async (message, command, input) => {
+    try {
+        logger.debug('Handling AYUB command', { input });
+        
+        // Special case for football news
+        if (input && input.trim().toLowerCase() === 'fut') {
+            logger.debug('Detected football news command');
+            return await handleAyubNewsFut(message);
+        }
+        
+        // If there's input, it's a search query
+        if (input && input.trim()) {
+            return await handleAyubNewsSearch(message, command, input.trim());
+        }
+        
+        // If there's a quoted message with a link, summarize it
+        if (message.hasQuotedMsg) {
+            const quotedMsg = await message.getQuotedMessage();
+            if (quotedMsg.body && extractLinks(quotedMsg.body).length > 0) {
+                return await handleAyubLinkSummary(quotedMsg);
+            }
+        }
+        
+        // If the message itself has a link, summarize it
+        if (message.body && extractLinks(message.body).length > 0) {
+            return await handleAyubLinkSummary(message);
+        }
+        
+        // Otherwise, get the latest news
+        return await handleAyubNewsSticker(message, command);
+    } catch (error) {
+        logger.error('Error in handleAyub:', error);
+        await message.reply('Ocorreu um erro ao processar o comando. Por favor, tente novamente.');
+    }
 };
 
 module.exports = {
     handleAyub,
-    handleAyubLinkSummary
+    handleAyubLinkSummary,
+    handleAyubNewsSticker,
+    handleAyubNewsSearch,
+    handleAyubNews,
+    handleAyubNewsFut
 }; 
