@@ -1,5 +1,5 @@
 const { Client, MessageMedia } = require('whatsapp-web.js');
-const config = require('../config');
+const config = require('../configs');
 const logger = require('../utils/logger');
 const { handleAutoDelete } = require('../utils/messageUtils');
 const { runCompletion } = require('../utils/openaiUtils');
@@ -90,7 +90,9 @@ async function handleChat(message, command, input) {
         }
 
         // Log the complete prompt
-        logger.prompt(`ChatGPT prompt for ${name} in ${groupName || 'DM'}`, prompt);
+        if (prompt) {
+            logger.prompt(`ChatGPT prompt for ${name} in ${groupName || 'DM'}`, prompt);
+        }
 
         const result = await runCompletion(prompt, 1, command.model);
         const response = await message.reply(result.trim());

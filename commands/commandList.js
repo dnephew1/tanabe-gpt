@@ -1,7 +1,8 @@
-const config = require('../config');
+const config = require('../configs');
 const logger = require('../utils/logger');
 const { handleAutoDelete } = require('../utils/messageUtils');
 const commandManager = require('../core/CommandManager');
+const whitelist = require('../configs/whitelist');
 
 async function handleCommandList(message, command) {
     try {
@@ -25,21 +26,12 @@ async function handleCommandList(message, command) {
                     if (name === 'TAG') return chat.isGroup; // Show TAG only in groups
                     if (!cmd.prefixes || !cmd.prefixes.length) return false;
                     
-                    // Check if user has permission
-                    if (cmd.permissions) {
-                        if (cmd.permissions.allowedIn === 'all') return true;
-                        if (Array.isArray(cmd.permissions.allowedIn)) {
-                            // Admin always has access
-                            if (userId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`) return true;
-                            // Check if chat is in allowed list
-                            return cmd.permissions.allowedIn.includes(chatId);
-                        }
-                    }
-                    return true;
+                    // Check if user has permission using the whitelist
+                    return whitelist.hasPermission(name, chatId, userId);
                 })
                 .map(async ([name, cmd]) => {
                     // Double check with CommandManager's permission check
-                    const isAllowed = await commandManager.isCommandAllowedInChat({ ...cmd, name }, chatId);
+                    const isAllowed = await commandManager.isCommandAllowedInChat({ ...cmd, name }, chatId, userId);
                     if (!isAllowed) return null;
 
                     if (name === 'TAG') {

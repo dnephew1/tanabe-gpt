@@ -1,5 +1,5 @@
 const axios = require('axios');
-const config = require('../config');
+const config = require('../configs');
 const { getOpenAIClient } = require('./openaiUtils');
 
 async function generateImage(prompt, cfg_scale = 7) {
@@ -18,7 +18,7 @@ async function generateImage(prompt, cfg_scale = 7) {
         });
         return response.data.image;
     } catch (error) {
-        console.error('[ERROR] Error generating image:', error.response ? error.response.data : error.message);
+        logger.error('[ERROR] Error generating image:', error.response ? error.response.data : error.message);
         return null;
     }
 }
@@ -33,7 +33,7 @@ async function improvePrompt(prompt) {
         });
         return completion.choices[0].message.content;
     } catch (error) {
-        console.error('OpenAI API Error:', error.message);
+        logger.error('OpenAI API Error:', error.message);
         throw error;
     }
 }

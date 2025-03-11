@@ -1,6 +1,5 @@
 const fs = require('fs').promises;
 const path = require('path');
-const config = require('../config');
 const logger = require('../utils/logger');
 
 // Cache directories to clear

@@ -2,7 +2,7 @@
 
 let config;
 setTimeout(() => {
-    config = require('../config');
+    config = require('../configs');
 }, 0);
 
 // Helper function to get all groups with periodic summaries enabled

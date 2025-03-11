@@ -4,7 +4,7 @@ const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 const logger = require('./logger');
-const config = require('../config');
+const config = require('../configs');
 const pdf = require('pdf-parse');
 
 // Ensure we have the required configuration
@@ -29,19 +29,33 @@ function getDocumentSettings() {
 
 async function extractTextFromPDF(filePath) {
     try {
+        // Temporarily redirect console.warn to suppress PDF warnings
+        const originalWarn = console.warn;
+        console.warn = function(msg) {
+            // Only suppress TT warnings from pdf-parse
+            if (!msg.includes('TT: undefined function')) {
+                originalWarn.apply(console, arguments);
+            }
+        };
+        
         // Read file as buffer
         const dataBuffer = await fs.promises.readFile(filePath);
         
-        // Parse PDF using pdf-parse
-        const data = await pdf(dataBuffer);
-        
-        // Get text content
-        let text = data.text || '';
-        
-        // Clean up text
-        text = text.replace(/\s+/g, ' ').trim();
-        
-        return text || 'No readable text found in PDF';
+        try {
+            // Parse PDF using pdf-parse
+            const data = await pdf(dataBuffer);
+            
+            // Get text content
+            let text = data.text || '';
+            
+            // Clean up text
+            text = text.replace(/\s+/g, ' ').trim();
+            
+            return text || 'No readable text found in PDF';
+        } finally {
+            // Restore original console.warn
+            console.warn = originalWarn;
+        }
     } catch (error) {
         logger.error('Error extracting text from PDF:', error);
         throw new Error('Failed to extract text from PDF');

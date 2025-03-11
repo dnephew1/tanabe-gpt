@@ -1,4 +1,4 @@
-const config = require('../config');
+const config = require('../configs');
 const logger = require('./logger');
 
 async function handleAutoDelete(message, command, isError = false) {
@@ -14,7 +14,7 @@ async function handleAutoDelete(message, command, isError = false) {
             try {
                 await message.delete(true);
             } catch (error) {
-                console.error('Error deleting message:', error);
+                logger.error('Error deleting message:', error);
             }
         }, timeout);
     }

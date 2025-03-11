@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { runCompletion } = require('./openaiUtils');
+const logger = require('./logger');
 
 // Function to scrape news
 async function scrapeNews() {
@@ -9,7 +10,7 @@ async function scrapeNews() {
         const response = await axios.get(url);
 
         if (response.status !== 200) {
-            console.error(`Failed to load page`);
+            logger.error(`Failed to load page`);
             return [];
         }
 
@@ -17,7 +18,7 @@ async function scrapeNews() {
         const newsElements = $('div.mr-auto');
 
         if (!newsElements.length) {
-            console.log(`No news elements found`);
+            logger.debug(`No news elements found`);
             return [];
         }
 
@@ -32,7 +33,34 @@ async function scrapeNews() {
 
         return news;
     } catch (error) {
-        console.error(`An error occurred while scraping news:`, error.message);
+        logger.error(`An error occurred while scraping news:`, error.message);
+        return [];
+    }
+}
+
+// Function to scrape football news from ge.globo.com
+async function scrapeNews2() {
+    try {
+        logger.debug('Scraping football news from ge.globo.com');
+        const url = 'https://ge.globo.com/futebol/';
+        const response = await axios.get(url);
+        const $ = cheerio.load(response.data);
+        const newsElements = $('.feed-post-body');
+
+        const news = [];
+        newsElements.each((index, element) => {
+            if (index < 5) {
+                const title = $(element).find('.feed-post-body-title a').text().trim();
+                const summary = $(element).find('.feed-post-body-resumo').text().trim();
+                const link = $(element).find('.feed-post-body-title a').attr('href');
+                news.push({ title, summary, link });
+            }
+        });
+
+        logger.debug(`Found ${news.length} football news items`);
+        return news;
+    } catch (error) {
+        logger.error('Error scraping football news:', error);
         return [];
     }
 }
@@ -52,7 +80,7 @@ async function searchNews(searchTerm) {
             return `${item.title} (${item.source}) - ${relativeTime}`;
         });
     } catch (error) {
-        console.error(`[ERROR] An error occurred in the searchNews function:`, error.message);
+        logger.error(`[ERROR] An error occurred in the searchNews function:`, error.message);
         return [];
     }
 }
@@ -69,7 +97,7 @@ async function translateToPortuguese(news) {
         const completion = await runCompletion(prompt, 1);
         return completion.trim().split('\n').filter(item => item.trim() !== '');
     } catch (error) {
-        console.error(`[ERROR] Translation failed:`, error.message);
+        logger.error(`[ERROR] Translation failed:`, error.message);
         return news;
     }
 }
@@ -102,6 +130,7 @@ function getRelativeTime(date) {
 
 module.exports = {
     scrapeNews,
+    scrapeNews2,
     searchNews,
     translateToPortuguese,
     parseXML,

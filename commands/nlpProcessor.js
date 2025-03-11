@@ -1,7 +1,9 @@
 const OpenAI = require('openai');
-const config = require('../config');
+const config = require('../configs');
 const COMMAND_PROCESSOR = require('../prompts/command_processor');
 const logger = require('../utils/logger');
+const whitelist = require('../configs/whitelist');
+const { runtimeConfig } = require('./admin');
 
 class NLPProcessor {
     constructor() {
@@ -9,6 +11,7 @@ class NLPProcessor {
             apiKey: config.CREDENTIALS.OPENAI_API_KEY
         });
         this.wizardStates = new Map(); // Track wizard states per user
+        this.welcomeMessageSent = new Set(); // Track users who have received the welcome message
         logger.debug('NLP Processor initialized');
     }
 
@@ -24,47 +27,36 @@ class NLPProcessor {
 
     async isAllowedChat(chat) {
         try {
-            // Check if chat is allowed to use ChatGPT (which means it can use NLP)
-            const chatGptCommand = config.COMMANDS.CHAT_GPT;
-            if (!chatGptCommand || !chatGptCommand.permissions) return false;
-
             const chatId = chat.id._serialized;
-            const isAdmin = chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
-
-            // Admin always has access
-            if (isAdmin) {
+            
+            // Check if this is a direct message from the admin
+            if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`) {
                 logger.debug('Admin access granted for NLP');
                 return true;
             }
 
-            // Check if allowed in all chats
-            if (chatGptCommand.permissions.allowedIn === 'all') {
-                logger.debug('NLP allowed in all chats');
-                return true;
-            }
-
-            // Check specific chat permissions
-            if (Array.isArray(chatGptCommand.permissions.allowedIn)) {
-                // For group chats, check against group name
-                if (chat.isGroup) {
-                    const isAllowed = chatGptCommand.permissions.allowedIn.includes(chat.name);
-                    logger.debug('Checking group chat NLP permissions', {
-                        groupName: chat.name,
-                        isAllowed
-                    });
-                    return isAllowed;
-                }
-                
-                // For DM chats, check against chat ID
-                const isAllowed = chatGptCommand.permissions.allowedIn.includes(chatId);
-                logger.debug('Checking DM chat NLP permissions', {
-                    chatId,
+            // For group chats, check against group name
+            if (chat.isGroup) {
+                const isAllowed = whitelist.hasPermission('CHAT_GPT', chat.name);
+                logger.debug('Checking group chat NLP permissions', {
+                    groupName: chat.name,
                     isAllowed
                 });
                 return isAllowed;
             }
-
-            return false;
+            
+            // For DM chats, check against chat ID or special DM format
+            const dmChatId = `dm.${chat.name}`;
+            const isAllowed = whitelist.hasPermission('CHAT_GPT', chat.name) || 
+                             whitelist.hasPermission('CHAT_GPT', dmChatId);
+            
+            logger.debug('Checking DM chat NLP permissions', {
+                chatId,
+                dmChatId,
+                chatName: chat.name,
+                isAllowed
+            });
+            return isAllowed;
         } catch (error) {
             logger.error('Error checking chat permissions:', error);
             return false;
@@ -73,133 +65,74 @@ class NLPProcessor {
 
     async shouldProcessMessage(message) {
         try {
-            // Skip if message starts with any command prefix (use traditional command processing)
-            if (message.body.startsWith('#') || message.body.startsWith('!')) {
-                logger.debug('Skipping NLP - message uses command prefix', { 
-                    prefix: message.body[0],
-                    body: message.body 
-                });
+            // Skip processing for messages from the bot itself
+            if (message.fromMe) {
+                logger.debug('Skipping NLP - message from bot');
                 return false;
             }
-
-            // Check if the bot is mentioned
-            const botNumber = config.CREDENTIALS.BOT_NUMBER;
-            const isBotMentioned = message.mentionedIds && 
-                                  message.mentionedIds.some(id => id === `${botNumber}@c.us`);
             
-            // If the bot is mentioned, always process with NLP
-            if (isBotMentioned) {
-                logger.debug('Processing with NLP - bot was mentioned', {
-                    messageBody: message.body
-                });
-                return true;
-            }
-
-            // Skip if message is a direct tag command (handled by tag.js)
-            if (message.body.startsWith('@') && message.body.split(' ')[0].length > 1) {
-                logger.debug('Skipping NLP - direct tag command detected', {
-                    tag: message.body.split(' ')[0]
-                });
+            // Skip processing for media messages without text
+            if (message.hasMedia && (!message.body || message.body.trim() === '')) {
+                logger.debug('Skipping NLP - media message without text');
                 return false;
             }
-
-            // Skip audio messages - let them be handled by audio transcription
-            if (message.type === 'audio' || message.type === 'ptt') {
-                logger.debug('Skipping NLP - audio message will be handled by transcription', { 
-                    type: message.type,
-                    hasMedia: message.hasMedia 
-                });
-                return false;
-            }
-
+            
+            // Get chat information
             const chat = await message.getChat();
             const contact = await message.getContact();
             const userId = contact.id._serialized;
-            const isAdminDM = !chat.isGroup && userId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
-
-            // Skip if message starts with "/" in admin DM
-            if (isAdminDM && message.body.startsWith('/')) {
-                logger.debug('Skipping NLP - admin debug message', { 
-                    userId,
-                    messageBody: message.body 
+            const isAdmin = userId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
+            
+            // Admin always has access in direct messages
+            if (isAdmin && !chat.isGroup) {
+                logger.debug('Processing message - admin user in direct message', { userId });
+                return true;
+            }
+            
+            // For group chats, only process if the bot is mentioned
+            if (chat.isGroup) {
+                const botNumber = config.CREDENTIALS.BOT_NUMBER;
+                const isBotMentioned = message.mentionedIds && 
+                                      message.mentionedIds.some(id => id === `${botNumber}@c.us`);
+                
+                if (!isBotMentioned) {
+                    logger.debug('Skipping NLP - bot not mentioned in group chat', { 
+                        chatName: chat.name,
+                        messageBody: message.body
+                    });
+                    return false;
+                }
+                
+                logger.debug('Bot mentioned in group chat, processing with NLP', {
+                    chatName: chat.name,
+                    messageBody: message.body
                 });
-                return false;
             }
-
-            logger.debug('NLP pre-processing check', {
-                isGroup: chat.isGroup,
-                userId,
-                chatId: chat.id._serialized,
-                messageBody: message.body,
-                hasQuoted: message.hasQuotedMsg,
-                hasMedia: message.hasMedia,
-                fromMe: message.fromMe,
-                mentions: message.mentionedIds || []
-            });
-
-            // Check if user is in wizard mode
-            if (this.wizardStates.has(userId)) {
-                logger.debug('Skipping NLP - user in wizard mode', { userId });
-                return false;
-            }
-
-            // Check if chat is allowed to use NLP
+            
+            // Check if NLP is allowed in this chat
             const isAllowed = await this.isAllowedChat(chat);
+            
             logger.debug('NLP permission check', {
                 chatId: chat.id._serialized,
                 chatName: chat.name,
                 isGroup: chat.isGroup,
-                isAllowed
+                isAllowed,
+                userId
             });
 
             if (!isAllowed) {
-                logger.debug('Skipping NLP - chat not allowed', { 
-                    chatId: chat.id._serialized,
-                    chatName: chat.name
-                });
+                // Send welcome message to unauthorized users in direct chats
+                if (!chat.isGroup && !this.welcomeMessageSent.has(userId)) {
+                    logger.debug('Sending welcome message to unauthorized user', { userId });
+                    await message.reply('Olá! Sou o TanabeGPT, um assistente de IA para WhatsApp. Infelizmente, você não está autorizado a usar meus serviços neste momento. Se você acredita que isso é um erro, por favor, entre em contato com o administrador.');
+                    this.welcomeMessageSent.add(userId);
+                }
                 return false;
             }
 
-            // For group chats, check for bot mention
-            if (chat.isGroup) {
-                // Check if message mentions the bot
-                const mentions = message.mentionedIds || [];
-                const botId = `${botNumber}@c.us`;
-                
-                logger.debug('Checking bot mention', {
-                    mentions,
-                    botNumber,
-                    botId,
-                    messageBody: message.body
-                });
-                
-                const isBotMentioned = mentions.includes(botId);
-                
-                logger.debug('Group chat mention check result', { 
-                    isGroup: true, 
-                    isBotMentioned,
-                    mentions,
-                    botId,
-                    messageBody: message.body
-                });
-
-                if (!isBotMentioned) {
-                    logger.debug('Skipping NLP - bot not mentioned in group');
-                    return false;
-                }
-                
-                logger.debug('Processing group message with NLP - bot mentioned');
-                return true;
-            }
-
-            // For DM chats, process all non-command messages except when in wizard mode
-            logger.debug('Processing DM message with NLP', {
-                chatId: chat.id._serialized,
-                messageBody: message.body
-            });
             return true;
         } catch (error) {
-            logger.error('Error checking if message should be processed:', error);
+            logger.error('Error in shouldProcessMessage:', error);
             return false;
         }
     }
@@ -207,6 +140,12 @@ class NLPProcessor {
     async processNaturalLanguage(message) {
         try {
             logger.debug('Starting NLP processing attempt');
+            
+            // Check if NLP processing is enabled
+            if (!runtimeConfig.nlpEnabled) {
+                logger.debug('NLP processing is disabled by configuration');
+                return null;
+            }
             
             // First check if we should process this message
             const shouldProcess = await this.shouldProcessMessage(message);
@@ -297,7 +236,7 @@ class NLPProcessor {
                             for (const [tag, tagConfig] of Object.entries(cmd.groupTags[chatName])) {
                                 // Get description and members from config
                                 const description = tagConfig.description || 'No description';
-                                const members = tagConfig.members.join(', ');
+                                const members = Array.isArray(tagConfig.members) ? tagConfig.members.join(', ') : 'No members';
                                 tagInfo += `\n      ${tag}: ${description} (${members})`;
                             }
                         }
@@ -326,7 +265,10 @@ class NLPProcessor {
                 .replace('{commandList}', commandList)
                 .replace('{messageContext}', messageContext);
 
-            logger.prompt('[PROMPT] Sending prompt to OpenAI:\n------- PROMPT START -------\n' + prompt + '\n-------- PROMPT END --------');
+            // Log the prompt only if PROMPT logging is enabled
+            if (config.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT === true) {
+                logger.prompt('[PROMPT] Sending prompt to OpenAI:', prompt);
+            }
 
             // Call OpenAI API
             const completion = await this.openai.chat.completions.create({
@@ -338,19 +280,49 @@ class NLPProcessor {
 
             // Get the command from the response
             const processedCommand = completion.choices[0].message.content.trim();
-            logger.prompt('[RESPONSE] Received from OpenAI:\n------- RESPONSE START -------\n' + processedCommand + '\n-------- RESPONSE END --------');
             
+            // Log the response only if PROMPT logging is enabled
+            if (config.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT === true) {
+                logger.prompt('[RESPONSE] Received from OpenAI:', processedCommand);
+            }
+            
+            // Parse the command
             if (processedCommand.startsWith('#')) {
-                const commandParts = processedCommand.slice(1).trim().split(' ');
-                const commandName = commandParts[0].toUpperCase();
+                // Extract command name and input
+                const commandParts = processedCommand.slice(1).trim().split(/\s+/);
+                let commandName = commandParts[0].toUpperCase();
                 const commandInput = commandParts.slice(1).join(' ');
+                
+                // Map command names to their actual command prefixes
+                const commandMap = {
+                    'AYUB_NEWS': 'ayubnews',
+                    'CHAT_GPT': '',  // Default command
+                    'RESUMO': 'resumo',
+                    'STICKER': 'sticker',
+                    'DESENHO': 'desenho',
+                    'COMMAND_LIST': '?',
+                    'AUDIO': 'audio',
+                    'RESUMO_CONFIG': 'ferramentaresumo',
+                    'TWITTER_DEBUG': 'twitterdebug',
+                    'FORCE_SUMMARY': 'forcesummary',
+                    'CACHE_CLEAR': 'clearcache'
+                };
+                
+                // Get the actual command prefix
+                const actualCommand = commandMap[commandName] || commandName.toLowerCase();
+                
                 logger.info(`NLP detected command: ${commandName} with input: ${commandInput}`);
+                logger.debug(`Mapped to actual command: #${actualCommand}`);
+                
+                // Return the properly formatted command
+                return `#${actualCommand} ${commandInput}`.trim();
             } else if (processedCommand.startsWith('@')) {
                 logger.info(`NLP detected tag command: ${processedCommand}`);
+                return processedCommand;
             }
             
             // Special handling for resumo_config command
-            if (processedCommand.startsWith('#ferramentaresumo')) {
+            if (processedCommand.toLowerCase().startsWith('#ferramentaresumo')) {
                 const contact = await message.getContact();
                 this.setWizardState(contact.id._serialized, true);
                 logger.debug('Wizard mode activated from NLP command');

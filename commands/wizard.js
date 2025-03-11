@@ -1,10 +1,12 @@
-const { Client } = require('whatsapp-web.js');
-const config = require('../config');
+const config = require('../configs');
 const { runCompletion } = require('../utils/openaiUtils');
 const { saveConfig } = require('../utils/configUtils');
 const logger = require('../utils/logger');
 const defaultPrompt = require('../prompts/periodic_summary').DEFAULT;
 const nlpProcessor = require('./nlpProcessor');
+const PERIODIC_SUMMARY = require('../configs/periodic_summary_config');
+const groupManager = require('../utils/group_manager');
+const envMapper = require('../utils/env_mapper');
 
 // Store user states
 const userStates = new Map();
@@ -372,9 +374,16 @@ async function handleWizard(message) {
                         break;
 
                     case 6: // Delete group
-                        delete config.PERIODIC_SUMMARY.groups[userState.selectedGroup];
-                        await saveConfig();
-                        await message.reply(`✅ Grupo "${userState.selectedGroup}" removido com sucesso!`);
+                        // Use the group manager to remove the group
+                        const result = groupManager.removeGroup(userState.selectedGroup);
+                        
+                        if (result.success) {
+                            await saveConfig();
+                            await message.reply(`✅ Grupo "${userState.selectedGroup}" removido com sucesso!`);
+                        } else {
+                            await message.reply(`❌ Erro ao remover o grupo: ${result.message}`);
+                        }
+                        
                         clearUserState(userId, false, message);
                         break;
                         
@@ -723,6 +732,37 @@ async function handleWizard(message) {
                 await saveConfig();
                 await message.reply(`✅ Configuração salva com sucesso!\n\n${formatGroupConfig(groupName2, config.PERIODIC_SUMMARY.groups[groupName2])}`);
                 clearUserState(userId, true, message);
+                break;
+
+            case 'AWAITING_CONFIRMATION':
+                if (messageText === '1') {
+                    // Save the configuration
+                    const groupName = userState.groupName;
+                    const config = userState.config;
+                    
+                    // Use the group manager to add the new group
+                    const result = groupManager.addNewGroup(groupName, {
+                        enableSummary: true,
+                        summaryConfig: config
+                    });
+                    
+                    if (result.success) {
+                        await message.reply(`✅ Configuração salva com sucesso para o grupo "${groupName}"!`);
+                        
+                        // Clear user state with success message
+                        clearUserState(userId, true, `Configuração para "${groupName}" salva com sucesso.`);
+                    } else {
+                        await message.reply(`❌ Erro ao salvar a configuração: ${result.message}`);
+                        
+                        // Clear user state with error message
+                        clearUserState(userId, false, `Erro ao salvar configuração: ${result.message}`);
+                    }
+                } else {
+                    await message.reply('❌ Configuração cancelada.');
+                    
+                    // Clear user state with cancellation message
+                    clearUserState(userId, false, 'Configuração cancelada pelo usuário.');
+                }
                 break;
 
             default:

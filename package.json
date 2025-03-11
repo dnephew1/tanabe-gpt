@@ -4,7 +4,19 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "setup": "node test/setupAuth.js",
+    "pretest": "node test/setupAuth.js",
+    "test": "node test/botTester.js",
+    "test:summary": "node test/runTest.js \"Basic Summary\" \"Summary with Quote\" \"Summary with Link\" \"Summary with Specific Count\" \"Summary with Document\" \"Direct Attachment Summary\" \"Summary Sticker\"",
+    "test:news": "node test/runTest.js \"Latest News\" \"Football News\" \"News Search\" \"News Sticker\" \"Link Auto Summary\"",
+    "test:chat": "node test/runTest.js \"ChatGPT Basic\" \"ChatGPT with Quote\" \"ChatGPT with Personality and History\"",
+    "test:media": "node test/runTest.js \"Drawing Generation\" \"Sticker Creation\" \"Sticker Search\" \"Audio Transcription\"",
+    "test:admin": "node test/runTest.js \"Force Summary\" \"Twitter Debug\" \"Cache Clear\"",
+    "test:misc": "node test/runTest.js \"Command List\" \"Tag Command\" \"Wizard Command\" \"Bot Message Reaction Delete\"",
+    "test:history": "node test/runTest.js \"ChatGPT with Personality and History\"",
+    "test:sticker": "node test/runTest.js \"Sticker Creation\" \"Sticker Search\"",
+    "test:custom": "node test/runTest.js"
   },
   "keywords": [],
   "author": "",

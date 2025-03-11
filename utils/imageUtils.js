@@ -17,7 +17,7 @@ async function searchGoogleForImage(query) {
 
         return imageUrl || null;
     } catch (error) {
-        console.error(`Error while searching for image:`, error.message);
+        logger.error(`Error while searching for image:`, error.message);
         return null;
     }
 }
@@ -42,7 +42,7 @@ async function downloadImage(url) {
         }
         return filePath;
     } catch (error) {
-        console.error(`Error downloading image:`, error.message);
+        logger.error(`Error downloading image:`, error.message);
         return null;
     }
 }

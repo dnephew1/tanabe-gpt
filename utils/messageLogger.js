@@ -1,9 +1,10 @@
-const fs = require('fs').promises;
-const path = require('path');
 const logger = require('./logger');
-const config = require('../config');
+const config = require('../configs');
 
 let messageHistory = new Map();
+
+// Get group names from environment variables
+const GROUP_LF = process.env.GROUP_LF;
 
 async function initializeMessageLog() {
     try {
@@ -32,21 +33,29 @@ async function getMessageHistory(groupName = null) {
             return '';
         }
 
-        // For admin chat, use any group they have access to
-        if (!groupName || groupName === config?.CREDENTIALS?.ADMIN_NUMBER + '@c.us') {
-            const allowedGroups = config?.COMMANDS?.CHAT_GPT?.permissions?.allowedIn || [];
-            if (allowedGroups.length > 0) {
-                groupName = allowedGroups[0];
-            } else {
-                logger.warn('No groups configured for ChatGPT access');
-                return '';
-            }
+        // For admin chat, use the GROUP_LF group's message history
+        const adminNumber = config?.CREDENTIALS?.ADMIN_NUMBER;
+        const isAdminChat = !groupName || 
+                           groupName === `${adminNumber}@c.us` || 
+                           groupName.includes(adminNumber);
+        
+        if (isAdminChat) {
+            logger.debug(`Using ${GROUP_LF} group message history for admin chat`);
+            groupName = GROUP_LF;
         }
 
         // Verify the group has access to ChatGPT
         const allowedGroups = config?.COMMANDS?.CHAT_GPT?.permissions?.allowedIn || [];
-        if (!allowedGroups.includes(groupName)) {
-            logger.warn(`Group ${groupName} is not allowed to use ChatGPT`);
+        const whitelist = config?.COMMAND_WHITELIST?.CHAT_GPT || [];
+        
+        // Check both the old permissions and the new whitelist
+        const isAllowed = allowedGroups.includes(groupName) || 
+                         whitelist.includes(groupName) || 
+                         allowedGroups === 'all' || 
+                         whitelist === 'all';
+        
+        if (!isAllowed && !isAdminChat) {
+            logger.debug(`Group ${groupName} is not allowed to use ChatGPT`);
             return '';
         }
 

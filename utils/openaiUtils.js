@@ -3,7 +3,7 @@ const logger = require('./logger');
 
 let config;
 setTimeout(() => {
-    config = require('../config');
+    config = require('../configs');
 }, 0);
 
 // Initialize OpenAI with a getter function
@@ -19,8 +19,8 @@ function getOpenAIClient() {
 // Function to run ChatGPT completion
 const runCompletion = async (prompt, temperature = 1, model = null) => {
     try {
-        // Log the prompt using the logger's prompt function
-        if (config?.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT) {
+        // Check if prompt is defined before logging
+        if (prompt && config?.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT) {
             logger.prompt('ChatGPT Prompt', prompt);
         }
 
@@ -33,8 +33,8 @@ const runCompletion = async (prompt, temperature = 1, model = null) => {
 
         const result = completion.choices[0].message.content;
 
-        // Log the response using the logger's prompt function
-        if (config?.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT) {
+        // Check if result is defined before logging
+        if (result && config?.SYSTEM?.CONSOLE_LOG_LEVELS?.PROMPT) {
             logger.prompt('ChatGPT Response', result);
         }
 
