@@ -194,7 +194,16 @@ function setupListeners(client) {
                     if (isWhitelistedPhone && !chat.isGroup) {
                         logger.debug('Message from whitelisted phone number', { contactId });
                         
-                        // Check if the message is a valid wizard command
+                        // First, check if this is a non-prefixed command for the wizard
+                        // This ensures wizard commands work even without the #ferramentaresumo prefix
+                        const userState = getUserState(contactId);
+                        if (userState && userState.state !== 'INITIAL') {
+                            logger.debug('Whitelisted user in wizard mode, handling wizard without prefix', { contactId, state: userState.state });
+                            await handleWizard(message);
+                            return;
+                        }
+                        
+                        // Check if the message is a valid wizard command with prefix
                         if (message.body.toLowerCase().includes('#ferramentaresumo')) {
                             logger.debug('Valid wizard command detected, proceeding to wizard');
                             await handleWizard(message);
