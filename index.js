@@ -376,30 +376,34 @@ async function main() {
         // Perform git pull if running in production
         if (process.env.NODE_ENV === 'production') {
             logger.info('Performing git pull...');
-            
-            // Handle git information differently if run through start.sh
-            if (process.env.GIT_PULL_ALREADY_PERFORMED) {
-                if (process.env.LATEST_COMMIT) {
-                    logger.info('Latest commit:', process.env.LATEST_COMMIT);
-                }
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const { execSync } = require('child_process');
                 
-                // Log the git pull output from start.sh
-                if (process.env.GIT_PULL_OUTPUT) {
-                    if (process.env.GIT_PULL_OUTPUT.trim() === '' || 
-                        process.env.GIT_PULL_OUTPUT.includes('Already up to date')) {
+                // Check if we're running from start.sh by looking for the git_pull_output.txt file
+                const gitPullOutputPath = path.resolve(__dirname, 'git_pull_output.txt');
+                
+                if (fs.existsSync(gitPullOutputPath)) {
+                    // Read the git pull output from the file
+                    const gitPullOutput = fs.readFileSync(gitPullOutputPath, 'utf8').trim();
+                    
+                    // Output the git pull result
+                    if (gitPullOutput === '' || gitPullOutput.includes('Already up to date')) {
                         logger.info('Git pull completed: No changes detected (already up to date)');
                     } else {
-                        logger.info('Git pull result:', process.env.GIT_PULL_OUTPUT);
+                        logger.info('Git pull result:', gitPullOutput);
+                    }
+                    
+                    // Try to clean up the file after reading it
+                    try {
+                        fs.unlinkSync(gitPullOutputPath);
+                    } catch (unlinkError) {
+                        logger.debug('Could not delete git_pull_output.txt:', unlinkError.message);
                     }
                 } else {
-                    logger.info('Git pull was performed by start.sh (no detailed output available)');
-                }
-            } else {
-                // If not run through start.sh, perform git pull directly
-                try {
-                    const { execSync } = require('child_process');
-                    
-                    // Check for recent git pull results in system logs
+                    // Perform git pull directly if we're not running from start.sh
+                    // Get the latest commit info
                     try {
                         const recentGitLogs = execSync('git log -1 --pretty=format:"%h - %s (%cr)"').toString().trim();
                         logger.info('Latest commit:', recentGitLogs);
@@ -415,10 +419,10 @@ async function main() {
                     } else {
                         logger.info('Git pull result:', output);
                     }
-                } catch (error) {
-                    logger.error('Error performing git pull:', error.message);
-                    // Continue even if git pull fails
                 }
+            } catch (error) {
+                logger.error('Error during git operations:', error.message);
+                // Continue even if git operations fail
             }
         }
 
