@@ -5,7 +5,7 @@ const logger = require('../utils/logger');
 const commandManager = require('./CommandManager');
 const { registerCommands } = require('./CommandRegistry');
 const { handleAyubLinkSummary } = require('../commands/ayub');
-const { initializeTwitterMonitor } = require('../commands/twitterMonitor');
+const { initializeNewsMonitor } = require('../commands/newsMonitor');
 const { getUserState, handleWizard } = require('../commands/wizard');
 const nlpProcessor = require('../commands/nlpProcessor');
 const crypto = require('crypto');
@@ -492,14 +492,14 @@ function setupListeners(client) {
             }
         });
 
-        // Initialize Twitter monitor when client is ready
+        // Initialize news monitor when client is ready
         client.on('ready', async () => {
-            if (config.TWITTER.enabled) {
-                logger.debug('Initializing Twitter monitor...');
+            if (config.NEWS_MONITOR.enabled) {
+                logger.debug('Initializing news monitor...');
                 try {
-                    await initializeTwitterMonitor(client);
+                    await initializeNewsMonitor(client);
                 } catch (error) {
-                    logger.error('Failed to initialize Twitter monitor:', error);
+                    logger.error('Failed to initialize news monitor:', error);
                 }
             }
         });

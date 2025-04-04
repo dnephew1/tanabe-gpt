@@ -207,33 +207,39 @@ const TEST_CASES = {
     ADMIN: [
         {
             name: 'Force Summary',
-            command: '!forcesummary',
-            expectedResponseContains: ['resumo', 'forçado', 'group', 'groups', 'grupos'],
-            adminOnly: true,
-            description: 'Should force a summary',
+            command: '#forcesummary',
+            expectedResponseContains: ['summary', 'scheduling'],
+            description: 'Should force a summary to be generated',
             category: 'ADMIN',
-            extraDelay: 5000,
-            useBotChat: true // Use direct chat with bot for admin commands
+            adminOnly: true,
+            extraDelay: 5000
         },
         {
             name: 'Twitter Debug',
-            command: '!twitterdebug',
-            expectedResponseContains: ['Twitter'],
-            adminOnly: true,
-            description: 'Should show Twitter API status',
+            command: '#twitterdebug',
+            expectedResponseContains: ['API Status', 'Twitter'],
+            description: 'Should show Twitter debug information',
             category: 'ADMIN',
-            extraDelay: 5000,
-            useBotChat: true // Use direct chat with bot for admin commands
+            adminOnly: true,
+            extraDelay: 5000
+        },
+        {
+            name: 'RSS Debug',
+            command: '#rssdebug',
+            expectedResponseContains: ['RSS Feed Debug', 'Summary'],
+            description: 'Should show RSS debug information',
+            category: 'ADMIN',
+            adminOnly: true,
+            extraDelay: 5000
         },
         {
             name: 'Cache Clear',
-            command: '!cacheclear',
-            expectedResponseContains: ['cache'],
-            adminOnly: true,
+            command: '#clearcache',
+            expectedResponseContains: ['Cache cleared successfully'],
             description: 'Should clear the cache',
             category: 'ADMIN',
-            extraDelay: 5000,
-            useBotChat: true // Use direct chat with bot for admin commands
+            adminOnly: true,
+            extraDelay: 2000
         }
     ],
     

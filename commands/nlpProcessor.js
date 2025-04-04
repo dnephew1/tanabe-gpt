@@ -11,7 +11,7 @@ class NLPProcessor {
             apiKey: config.CREDENTIALS.OPENAI_API_KEY
         });
         this.wizardStates = new Map(); // Track wizard states per user
-        this.welcomeMessageSent = new Set(); // Track users who have received the welcome message
+        this.welcomeMessageSent = new Map(); // Track when users received the welcome message
         logger.debug('NLP Processor initialized');
     }
 
@@ -25,13 +25,80 @@ class NLPProcessor {
         }
     }
 
+    /**
+     * Checks if a welcome/marketing message should be sent to a user
+     * @param {string} userId - The user ID to check
+     * @returns {boolean} - True if a welcome message should be sent (hasn't been sent in the last 3 hours)
+     */
+    shouldSendWelcomeMessage(userId) {
+        const lastWelcomeTime = this.welcomeMessageSent.get(userId);
+        
+        // If no welcome message has been sent or it was sent more than 3 hours ago
+        if (!lastWelcomeTime || (Date.now() - lastWelcomeTime > 3 * 60 * 60 * 1000)) {
+            // Update the timestamp to current time
+            this.welcomeMessageSent.set(userId, Date.now());
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Sends a marketing message to users in direct chats if they haven't received one recently
+     * @param {Object} message - The message object
+     * @param {Object} chat - The chat object
+     * @param {string} userId - The user ID
+     * @param {boolean} isCommandAttempt - Whether this is being called after a command attempt
+     * @returns {boolean} - True if a message was sent
+     */
+    async sendWelcomeMessageIfNeeded(message, chat, userId, isCommandAttempt = false) {
+        if (!chat.isGroup) {
+            const lastWelcomeTime = this.welcomeMessageSent.get(userId);
+            const isFirstContact = !lastWelcomeTime;
+            const isExpiredContact = lastWelcomeTime && (Date.now() - lastWelcomeTime > 3 * 60 * 60 * 1000);
+            
+            // Only send if this is a first contact or contact after 3-hour window
+            if (isFirstContact || isExpiredContact) {
+                try {
+                    // Format user info consistently
+                    const userPhone = userId.endsWith('@c.us') ? userId.split('@')[0] : userId;
+                    const contact = await message.getContact();
+                    const userName = contact.pushname || contact.name || userPhone;
+                    const userIdentifier = `${userName} (${userPhone})`;
+                    
+                    // Single consolidated log entry for first contact
+                    if (isFirstContact) {
+                        logger.warn(`First contact from unknown user ${userIdentifier}${isCommandAttempt ? ' - command attempt: ' + message.body : ''}`);
+                    } else {
+                        // For contacts after the 3-hour window
+                        const lastContactTime = new Date(lastWelcomeTime).toISOString();
+                        logger.info(`Contact from unauthorized user ${userIdentifier} after 3-hour window (last: ${lastContactTime})${isCommandAttempt ? ' - command attempt: ' + message.body : ''}`);
+                    }
+                    
+                    // Update timestamp before sending the message
+                    this.welcomeMessageSent.set(userId, Date.now());
+                    await message.reply(config.COMMANDS.COMMAND_LIST.marketingMessage);
+                    return true;
+                } catch (error) {
+                    logger.error('Error sending welcome message:', error);
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+
     async isAllowedChat(chat) {
         try {
             const chatId = chat.id._serialized;
             
+            // Format location string consistently
+            const locationStr = chat.isGroup ? `in ${chat.name}` : "in DM";
+            
             // Check if this is a direct message from the admin
             if (chatId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`) {
-                logger.debug('Admin access granted for NLP');
+                const adminPhone = config.CREDENTIALS.ADMIN_NUMBER;
+                logger.debug(`Admin access granted for NLP to user (${adminPhone}) in DM`);
                 return true;
             }
 
@@ -39,7 +106,7 @@ class NLPProcessor {
             if (chat.isGroup) {
                 const isAllowed = await whitelist.hasPermission('CHAT_GPT', chat.name);
                 logger.debug('Checking group chat NLP permissions', {
-                    groupName: chat.name,
+                    chatLocation: locationStr,
                     isAllowed
                 });
                 return isAllowed;
@@ -50,10 +117,12 @@ class NLPProcessor {
             const isAllowed = await whitelist.hasPermission('CHAT_GPT', chat.name) || 
                             await whitelist.hasPermission('CHAT_GPT', dmChatId);
             
+            // Format chat ID consistently
+            const userPhone = chatId.endsWith('@c.us') ? chatId.split('@')[0] : chatId;
+            
             logger.debug('Checking DM chat NLP permissions', {
-                chatId,
-                dmChatId,
-                chatName: chat.name,
+                user: `User (${userPhone})`,
+                chatLocation: locationStr,
                 isAllowed
             });
             return isAllowed;
@@ -83,9 +152,14 @@ class NLPProcessor {
             const userId = contact.id._serialized;
             const isAdmin = userId === `${config.CREDENTIALS.ADMIN_NUMBER}@c.us`;
             
+            // Format user identifier consistently for logs
+            const userPhone = userId.endsWith('@c.us') ? userId.split('@')[0] : userId;
+            const userName = contact.pushname || contact.name || userPhone;
+            const userIdentifier = `${userName} (${userPhone})`;
+            
             // Admin always has access in direct messages
             if (isAdmin && !chat.isGroup) {
-                logger.debug('Processing message - admin user in direct message', { userId });
+                logger.debug(`Processing message - admin user ${userIdentifier} in direct message`);
                 return true;
             }
             
@@ -112,21 +186,18 @@ class NLPProcessor {
             // Check if NLP is allowed in this chat
             const isAllowed = await this.isAllowedChat(chat);
             
+            // Generate location string consistently
+            const locationStr = chat.isGroup ? `in ${chat.name}` : "in DM"; 
+            
             logger.debug('NLP permission check', {
-                chatId: chat.id._serialized,
-                chatName: chat.name,
-                isGroup: chat.isGroup,
+                chatLocation: locationStr,
                 isAllowed,
-                userId
+                userIdentifier
             });
 
             if (!isAllowed) {
                 // Send welcome message to unauthorized users in direct chats
-                if (!chat.isGroup && !this.welcomeMessageSent.has(userId)) {
-                    logger.debug('Sending welcome message to unauthorized user', { userId });
-                    await message.reply('Olá! Sou o TanabeGPT, um assistente de IA para WhatsApp. Infelizmente, você não está autorizado a usar meus serviços neste momento. Se você acredita que isso é um erro, por favor, entre em contato com o administrador.');
-                    this.welcomeMessageSent.add(userId);
-                }
+                await this.sendWelcomeMessageIfNeeded(message, chat, userId);
                 return false;
             }
 
@@ -304,6 +375,7 @@ class NLPProcessor {
                     'AUDIO': 'audio',
                     'RESUMO_CONFIG': 'ferramentaresumo',
                     'TWITTER_DEBUG': 'twitterdebug',
+                    'RSS_DEBUG': 'rssdebug',
                     'FORCE_SUMMARY': 'forcesummary',
                     'CACHE_CLEAR': 'clearcache'
                 };

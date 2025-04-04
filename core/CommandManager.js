@@ -59,6 +59,7 @@ class CommandManager {
                             'audio': 'AUDIO',
                             'ferramentaresumo': 'RESUMO_CONFIG',
                             'twitterdebug': 'TWITTER_DEBUG',
+                            'rssdebug': 'RSS_DEBUG',
                             'forcesummary': 'FORCE_SUMMARY',
                             'clearcache': 'CACHE_CLEAR'
                         };
@@ -143,66 +144,6 @@ class CommandManager {
             return { command: null, input: '' };
         }
 
-        // First check for # commands (with or without spaces after #)
-        if (trimmedBody.startsWith('#')) {
-            // Clean the command by removing # and any leading whitespace
-            const cleanedCommand = trimmedBody.slice(1).trim();
-            
-            // If there's content after #
-            if (cleanedCommand.length > 0) {
-                // Extract the command part (first word after # and any whitespace)
-                const commandPart = cleanedCommand.split(/\s+/)[0].toLowerCase();
-                
-                logger.debug('Parsing command with prefix #', {
-                    originalMessage: trimmedBody,
-                    cleanedCommand,
-                    commandPart
-                });
-                
-                // Map command prefixes to command names
-                const commandPrefixMap = {
-                    'ayubnews': 'AYUB_NEWS',
-                    'resumo': 'RESUMO',
-                    'sticker': 'STICKER',
-                    'desenho': 'DESENHO',
-                    '?': 'COMMAND_LIST',
-                    'audio': 'AUDIO',
-                    'ferramentaresumo': 'RESUMO_CONFIG',
-                    'twitterdebug': 'TWITTER_DEBUG',
-                    'forcesummary': 'FORCE_SUMMARY',
-                    'clearcache': 'CACHE_CLEAR'
-                };
-                
-                // Check if the command part matches any known command prefix
-                const commandKey = commandPrefixMap[commandPart];
-                if (commandKey && config.COMMANDS[commandKey]) {
-                    // Extract input by removing the command part
-                    const input = cleanedCommand.substring(commandPart.length).trim();
-                    
-                    // Special case for AYUB_NEWS_FUT
-                    if (commandKey === 'AYUB_NEWS' && input.trim().toLowerCase().startsWith('fut')) {
-                        logger.debug(`Found AYUB_NEWS_FUT command`, {
-                            commandKey: 'AYUB_NEWS_FUT',
-                            input: input.slice(3).trim() // Remove 'fut' from input
-                        });
-                        return { 
-                            command: { ...config.COMMANDS['AYUB_NEWS_FUT'], name: 'AYUB_NEWS_FUT' }, 
-                            input: input.slice(3).trim() // Remove 'fut' from input
-                        };
-                    }
-                    
-                    logger.debug(`Found command match for ${commandPart}`, {
-                        commandKey,
-                        input
-                    });
-                    return { 
-                        command: { ...config.COMMANDS[commandKey], name: commandKey }, 
-                        input 
-                    };
-                }
-            }
-        }
-
         // Check each command's prefixes
         for (const [commandName, command] of Object.entries(config.COMMANDS)) {
             if (!command.prefixes || !Array.isArray(command.prefixes)) {
@@ -245,6 +186,65 @@ class CommandManager {
             // Clean the command by removing # and any leading whitespace
             const cleanedCommand = trimmedBody.slice(1).trim();
             
+            // If there's content after #
+            if (cleanedCommand.length > 0) {
+                // Extract the command part (first word after # and any whitespace)
+                const commandPart = cleanedCommand.split(/\s+/)[0].toLowerCase();
+                
+                logger.debug('Parsing command with prefix #', {
+                    originalMessage: trimmedBody,
+                    cleanedCommand,
+                    commandPart
+                });
+                
+                // Map command prefixes to command names
+                const commandPrefixMap = {
+                    'ayubnews': 'AYUB_NEWS',
+                    'resumo': 'RESUMO',
+                    'sticker': 'STICKER',
+                    'desenho': 'DESENHO',
+                    '?': 'COMMAND_LIST',
+                    'audio': 'AUDIO',
+                    'ferramentaresumo': 'RESUMO_CONFIG',
+                    'twitterdebug': 'TWITTER_DEBUG',
+                    'rssdebug': 'RSS_DEBUG',
+                    'forcesummary': 'FORCE_SUMMARY',
+                    'clearcache': 'CACHE_CLEAR'
+                };
+                
+                // Check if the command part matches any known command prefix
+                const commandKey = commandPrefixMap[commandPart];
+                if (commandKey && config.COMMANDS[commandKey]) {
+                    // Extract input by removing the command part
+                    const input = cleanedCommand.substring(commandPart.length).trim();
+                    
+                    // Special case for AYUB_NEWS_FUT
+                    if (commandKey === 'AYUB_NEWS' && input.trim().toLowerCase().startsWith('fut')) {
+                        const futCommand = config.COMMANDS['AYUB_NEWS_FUT'];
+                        if (futCommand) {
+                            logger.debug(`Found AYUB_NEWS_FUT command`, {
+                                commandKey: 'AYUB_NEWS_FUT',
+                                input: input.slice(3).trim() // Remove 'fut' from input
+                            });
+                            return { 
+                                command: { ...futCommand, name: 'AYUB_NEWS_FUT' }, 
+                                input: input.slice(3).trim() // Remove 'fut' from input
+                            };
+                        }
+                    }
+                    
+                    logger.debug(`Found command match for ${commandPart}`, {
+                        commandKey,
+                        input
+                    });
+                    return { 
+                        command: { ...config.COMMANDS[commandKey], name: commandKey }, 
+                        input 
+                    };
+                }
+            }
+            
+            // If no specific command matched, fall back to ChatGPT
             const chatGptCommand = config.COMMANDS.CHAT_GPT;
             if (this.validateCommand('CHAT_GPT', chatGptCommand)) {
                 logger.debug('Treating as ChatGPT command', {
@@ -289,10 +289,15 @@ class CommandManager {
     async isCommandAllowedInChat(command, chatId, userId = null) {
         const commandName = command.name;
         
+        // Format user identifier consistently
+        const userPhone = userId?.endsWith('@c.us') ? userId.split('@')[0] : userId;
+        const locationStr = chatId.endsWith('@g.us') ? "in group chat" : "in DM";
+        
         logger.debug('Checking command permissions', {
             command: commandName,
             chatId,
-            userId
+            user: `User (${userPhone})`,
+            location: locationStr
         });
 
         // Check if user is admin (direct check)
@@ -300,10 +305,7 @@ class CommandManager {
         const isAdmin = userId === `${adminNumber}@c.us` || userId === adminNumber;
         
         if (isAdmin) {
-            logger.debug('Admin access granted for command', {
-                command: commandName,
-                userId
-            });
+            logger.debug(`Admin access granted for command ${commandName} to User (${userPhone}) ${locationStr}`);
             return true;
         }
 
@@ -321,18 +323,11 @@ class CommandManager {
         // Use the whitelist's hasPermission function
         const isAllowed = await whitelist.hasPermission(commandName, chatName, userId);
         
-        // Only log a warning if it's not an admin and the command is not allowed
-        if (!isAllowed && !isAdmin) {
-            // Don't log the warning for ChatGPT commands from admin
-            if (!(commandName === 'CHAT_GPT' && isAdmin)) {
-                logger.debug(`Command ${commandName} not allowed for user ${userId} in chat ${chatName}`);
-            }
-        }
-        
+        // Debug log only (removed warning logs to avoid duplication)
         logger.debug('Permission check result', {
             command: commandName,
-            chatName,
-            userId,
+            chatLocation: chatId.endsWith('@g.us') ? `in ${chatName}` : "in DM",
+            user: `User (${userPhone})`,
             isAllowed
         });
         
@@ -393,14 +388,52 @@ class CommandManager {
             // Use NLP input if provided (for tag commands)
             const finalInput = nlpInput || input;
             
-            // Generate a more descriptive log message
+            // Get chat ID and user ID
+            const chatId = chat.id._serialized;
+            const userId = contact.id._serialized;
+
+            // Check if command is allowed in this chat for this user
+            const isAllowed = await this.isCommandAllowedInChat(command, chatId, userId);
+            if (!isAllowed) {
+                const { isBot, isDM, isAdmin, isOwner, isUser } = isAllowed;
+                
+                logger.warn(`Command ${command.name} blocked due to permissions`, {
+                    command: command.name,
+                    isBot, isDM, isAdmin, isOwner, isUser
+                });
+                
+                if (isBot && command.errorMessages?.bot) {
+                    await message.reply(command.errorMessages.bot);
+                } else if (!isDM && command.errorMessages?.group) {
+                    await message.reply(command.errorMessages.group);
+                } else if (!isAdmin && command.errorMessages?.admin) {
+                    await message.reply(command.errorMessages.admin);
+                } else if (!isOwner && command.errorMessages?.owner) {
+                    await message.reply(command.errorMessages.owner);
+                } else if (!isUser && command.errorMessages?.user) {
+                    await message.reply(command.errorMessages.user);
+                } else if (command.errorMessages?.permission) {
+                    await message.reply(command.errorMessages.permission);
+                }
+                
+                return false;
+            }
+            
+            const userPhone = userId.endsWith('@c.us') ? userId.split('@')[0] : userId;
+            const userName = contact.pushname || contact.name || userPhone;
+            const userIdentifier = `${userName} (${userPhone})`;
+            // Location format: "in DM" or "in Group Name"
+            const locationStr = chat.isGroup ? `in ${chat.name}` : "in DM";
+            
             let logMessage;
             if (message.hasMedia) {
-                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with media attachment`;
+                logMessage = `Executing command: ${command.name} by ${userIdentifier} ${locationStr} with media attachment`;
             } else if (message.hasQuotedMsg) {
-                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with quoted message`;
+                logMessage = `Executing command: ${command.name} by ${userIdentifier} ${locationStr} with quoted message`;
+            } else if (finalInput && finalInput.length > 0) {
+                logMessage = `Executing command: ${command.name} by ${userIdentifier} ${locationStr} with input: ${finalInput}`;
             } else {
-                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${finalInput}`;
+                logMessage = `Executing command: ${command.name} by ${userIdentifier} ${locationStr}`;
             }
             
             logger.info(logMessage);
@@ -419,20 +452,6 @@ class CommandManager {
                 return false;
             }
 
-            // Get chat ID and user ID
-            const chatId = chat.id._serialized;
-            const userId = contact.id._serialized;
-
-            // Check if command is allowed in this chat for this user
-            const isAllowed = await this.isCommandAllowedInChat(command, chatId, userId);
-            if (!isAllowed) {
-                logger.warn(`Command ${command.name} not allowed for user ${userId} in chat ${chatId}`);
-                if (command.errorMessages?.notAllowed) {
-                    await message.reply(command.errorMessages.notAllowed);
-                }
-                return false;
-            }
-
             // Get the handler for this command
             const handler = this.commandHandlers.get(command.name);
             if (!handler) {
@@ -445,7 +464,12 @@ class CommandManager {
                 await handler(message, command, finalInput);
                 return true;
             } catch (error) {
-                logger.error(`Error executing command ${command.name}:`, error);
+                // Format user identifier consistently
+                const userPhone = userId.endsWith('@c.us') ? userId.split('@')[0] : userId;
+                // Format location consistently
+                const locationStr = chat.isGroup ? `in ${chat.name}` : "in DM";
+                
+                logger.error(`Error executing command ${command.name} by ${userPhone} ${locationStr}:`, error);
                 if (command.errorMessages?.error) {
                     await message.reply(command.errorMessages.error);
                 }

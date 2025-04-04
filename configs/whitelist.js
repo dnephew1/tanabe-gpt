@@ -79,6 +79,8 @@ const COMMAND_WHITELIST = {
     
     // Admin commands whitelist (only admin has access)
     TWITTER_DEBUG: [],
+    RSS_DEBUG: [],
+    NEWS_STATUS: [],
     FORCE_SUMMARY: [],
     CACHE_CLEAR: []
 };
@@ -86,6 +88,8 @@ const COMMAND_WHITELIST = {
 // List of admin-only commands
 const ADMIN_ONLY_COMMANDS = [
     'TWITTER_DEBUG',
+    'RSS_DEBUG',
+    'NEWS_STATUS',
     'FORCE_SUMMARY',
     'CACHE_CLEAR'
 ];

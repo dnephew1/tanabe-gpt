@@ -3,7 +3,7 @@
 // Import configurations
 const CREDENTIALS = require('./credentials');
 const COMMANDS = require('./commandConfigs');
-const TWITTER = require('./commandConfigs/twitter.config');
+const NEWS_MONITOR = require('./commandConfigs/newsMonitor.config');
 
 // Avoid circular dependency with periodic_summary_config
 let PERIODIC_SUMMARY;
@@ -50,7 +50,7 @@ const SYSTEM = {
 // Export all configurations
 module.exports = {
     SYSTEM,
-    TWITTER,
+    NEWS_MONITOR,
     COMMANDS,
     get PERIODIC_SUMMARY() {
         return PERIODIC_SUMMARY;

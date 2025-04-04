@@ -14,7 +14,7 @@ const config = require('./configs');
 const { setupListeners } = require('./core/listener');
 const { runPeriodicSummary } = require('./commands/periodicSummary');
 const { initializeMessageLog } = require('./utils/messageLogger');
-const { initializeTwitterMonitor } = require('./commands/twitterMonitor');
+const { initializeNewsMonitor } = require('./commands/newsMonitor');
 const commandManager = require('./core/CommandManager');
 const logger = require('./utils/logger');
 const path = require('path');
@@ -336,13 +336,13 @@ async function initializeBot() {
         initializeMessageLog();
         logger.debug('Message logging initialized successfully');
 
-        // Initialize Twitter monitor if enabled
+        // Initialize news monitor (handles both Twitter and RSS)
         try {
-            logger.debug('Initializing Twitter monitor...');
-            await initializeTwitterMonitor();
+            logger.debug('Initializing news monitor...');
+            await initializeNewsMonitor();
         } catch (error) {
-            logger.error('Failed to initialize Twitter monitor:', error);
-            // Continue even if Twitter monitor fails
+            logger.error('Failed to initialize news monitor:', error);
+            // Continue even if news monitor fails
         }
         
         // Notify admin of startup

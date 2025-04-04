@@ -4,7 +4,7 @@ const { performCacheClearing } = require('./cacheManagement');
 const logger = require('../utils/logger');
 const { getNextSummaryInfo, scheduleNextSummary } = require('../utils/periodicSummaryUtils');
 const { runPeriodicSummary } = require('./periodicSummary');
-const { getCurrentApiKey } = require('./twitterMonitor');
+const { debugTwitterFunctionality, debugRssFunctionality, newsMonitorStatus, getCurrentTwitterApiKey } = require('./newsMonitor');
 const axios = require('axios');
 
 // Runtime configuration that can be modified during execution
@@ -128,8 +128,23 @@ async function handleTwitterDebug(message) {
         const chat = await message.getChat();
         await chat.sendStateTyping();
 
+        // Parse the input to check for on/off commands
+        const args = message.body.split(' ').slice(1);
+        const isToggleCommand = args.length > 0 && 
+            (args[0].toLowerCase() === 'on' || 
+             args[0].toLowerCase() === 'off' || 
+             args[0].toLowerCase() === 'enable' || 
+             args[0].toLowerCase() === 'disable');
+
+        // Skip the enabled check if it's a toggle command
+        if (!isToggleCommand && !config.NEWS_MONITOR.TWITTER_ENABLED) {
+            logger.error('Twitter monitoring is disabled in configuration');
+            await message.reply('Twitter monitoring is disabled in configuration. Use "!twitterdebug on" to enable it.');
+            return;
+        }
+
         // Check if Twitter accounts are configured
-        if (!config.TWITTER || !config.TWITTER.ACCOUNTS || !config.TWITTER.ACCOUNTS.length) {
+        if (!config.NEWS_MONITOR.TWITTER_ACCOUNTS || !config.NEWS_MONITOR.TWITTER_ACCOUNTS.length) {
             logger.error('No Twitter accounts configured');
             await message.reply('No Twitter accounts configured in the system.');
             return;
@@ -142,74 +157,56 @@ async function handleTwitterDebug(message) {
             return;
         }
 
-        const account = config.TWITTER.ACCOUNTS[0]; // Only use the first account
-        try {
-            logger.debug('Making Twitter API request', {
-                userId: account.userId,
-                username: account.username
-            });
-
-            // Get current API key
-            const { key, name, usage } = await getCurrentApiKey();
-            
-            // Get latest 5 tweets using Twitter API
-            const twitterApiUrl = `https://api.twitter.com/2/users/${account.userId}/tweets?tweet.fields=text&max_results=5`;
-            const response = await axios.get(twitterApiUrl, {
-                headers: {
-                    'Authorization': `Bearer ${key.bearer_token.trim()}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            let debugInfo = 'No tweets found';
-            if (response.data && response.data.data && response.data.data.length > 0) {
-                const tweets = response.data.data;
-                const latestTweet = tweets[0];
-                const olderTweets = tweets.slice(1);
-
-                logger.debug('Retrieved tweets successfully', {
-                    tweetCount: tweets.length,
-                    latestTweetId: latestTweet.id
-                });
-
-                // Prepare the evaluation prompt
-                const prompt = config.TWITTER.PROMPTS.EVALUATE_NEWS
-                    .replace('{post}', latestTweet.text)
-                    .replace('{previous_posts}', olderTweets.map(t => t.text).join('\n\n'));
-
-                // Evaluate the news using ChatGPT
-                const evaluation = await runCompletion(prompt, 1);
-                
-                debugInfo = `
-API Status:
-- Primary Key Usage: ${usage.primary.usage}/${usage.primary.limit}
-- Fallback Key Usage: ${usage.fallback.usage}/${usage.fallback.limit}
-- Currently Using: ${name} key
-
-Latest Tweet ID: ${latestTweet.id}
-
-Stored Tweet ID: ${account.lastTweetId}
-
-Would Send to Group: ${latestTweet.id !== account.lastTweetId ? 'Yes' : 'No (Already Sent)'}
-
-Latest Tweet Text: ${latestTweet.text}
-
-Evaluation Result: ${evaluation.trim()}`;
-            }
-            
-            await message.reply(`@${account.username}:\n${debugInfo}\n\nNote: Checking for new tweets every ${config.TWITTER.CHECK_INTERVAL/60000} minutes.`);
-        } catch (error) {
-            logger.error('Twitter API error', error);
-            
-            let errorMessage = `Error checking @${account.username}: ${error.message}`;
-            if (error.response?.status === 401) {
-                errorMessage += '\nThe Twitter API token appears to be invalid or expired.';
-            }
-            await message.reply(errorMessage);
-        }
+        // Call the Twitter debug function
+        await debugTwitterFunctionality(message);
+        
     } catch (error) {
         logger.error('Error in Twitter debug command', error);
         await message.reply(`Debug error: ${error.message}`);
+    }
+}
+
+async function handleRssDebug(message) {
+    logger.debug('RSS debug command activated');
+    
+    // Check if message is from admin chat
+    if (!await isAdminChat(message)) {
+        logger.debug('RSS debug command rejected: not admin chat');
+        return;
+    }
+    
+    try {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+
+        // Parse the input to check for on/off commands
+        const args = message.body.split(' ').slice(1);
+        const isToggleCommand = args.length > 0 && 
+            (args[0].toLowerCase() === 'on' || 
+             args[0].toLowerCase() === 'off' || 
+             args[0].toLowerCase() === 'enable' || 
+             args[0].toLowerCase() === 'disable');
+
+        // Skip the enabled check if it's a toggle command
+        if (!isToggleCommand && !config.NEWS_MONITOR.RSS_ENABLED) {
+            logger.error('RSS monitoring is disabled in configuration');
+            await message.reply('RSS monitoring is disabled in configuration. Use "!rssdebug on" to enable it.');
+            return;
+        }
+
+        // Check if RSS feeds are configured
+        if (!config.NEWS_MONITOR.FEEDS || !config.NEWS_MONITOR.FEEDS.length) {
+            logger.error('No RSS feeds configured');
+            await message.reply('No RSS feeds configured in the system.');
+            return;
+        }
+
+        // Call the RSS debug function
+        await debugRssFunctionality(message);
+        
+    } catch (error) {
+        logger.error('Error in RSS debug:', error);
+        await message.reply('Error testing RSS functionality: ' + error.message);
     }
 }
 
@@ -255,10 +252,37 @@ async function handleConfig(message, command, input) {
     }
 }
 
+/**
+ * Handle the news monitor status command
+ */
+async function handleNewsStatus(message) {
+    logger.debug('News status command activated');
+    
+    // Check if message is from admin chat
+    if (!await isAdminChat(message)) {
+        logger.debug('News status command rejected: not admin chat');
+        return;
+    }
+    
+    try {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+        
+        // Call the news monitor status function
+        await newsMonitorStatus(message);
+        
+    } catch (error) {
+        logger.error('Error in news status command', error);
+        await message.reply(`Error retrieving news monitor status: ${error.message}`);
+    }
+}
+
 module.exports = {
     handleCacheClear,
     handleTwitterDebug,
     handleForceSummary,
+    handleRssDebug,
     handleConfig,
+    handleNewsStatus,
     runtimeConfig
 }; 

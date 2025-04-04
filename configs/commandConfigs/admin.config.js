@@ -39,6 +39,44 @@ const TWITTER_DEBUG_CONFIG = {
     }
 };
 
+// RSS debug command
+const RSS_DEBUG_CONFIG = {
+    prefixes: ['!rssdebug', '#rssdebug'],
+    description: 'Mostra informações de debug dos feeds RSS (apenas admin)',
+    permissions: {
+        allowedIn: 'all',
+        adminOnly: true
+    },
+    autoDelete: {
+        errorMessages: true,
+        commandMessages: false,
+        deleteTimeout: 60000,
+    },
+    errorMessages: {
+        notAllowed: 'Você não tem permissão para usar este comando.',
+        error: 'Erro ao obter informações de debug dos feeds RSS.'
+    }
+};
+
+// News Status command
+const NEWS_STATUS_CONFIG = {
+    prefixes: ['!newsstatus', '#newsstatus'],
+    description: 'Mostra o status atual do monitoramento de notícias (apenas admin)',
+    permissions: {
+        allowedIn: 'all',
+        adminOnly: true
+    },
+    autoDelete: {
+        errorMessages: true,
+        commandMessages: false,
+        deleteTimeout: 60000,
+    },
+    errorMessages: {
+        notAllowed: 'Você não tem permissão para usar este comando.',
+        error: 'Erro ao obter status do monitoramento de notícias.'
+    }
+};
+
 // Force summary command
 const FORCE_SUMMARY_CONFIG = {
     prefixes: ['!forcesummary', '#forcesummary'],
@@ -80,6 +118,8 @@ const CONFIG_CONFIG = {
 module.exports = {
     CACHE_CLEAR_CONFIG,
     TWITTER_DEBUG_CONFIG,
+    RSS_DEBUG_CONFIG,
+    NEWS_STATUS_CONFIG,
     FORCE_SUMMARY_CONFIG,
     CONFIG_CONFIG
 }; 
