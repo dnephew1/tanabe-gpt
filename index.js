@@ -377,13 +377,26 @@ async function main() {
         if (process.env.NODE_ENV === 'production') {
             logger.info('Performing git pull...');
             try {
+                // If we're running from start.sh, the git pull has already been performed
                 const { execSync } = require('child_process');
-                const output = execSync('git pull').toString().trim();
                 
-                if (output === '') {
-                    logger.info('Git pull completed: No changes detected (already up to date)');
-                } else {
-                    logger.info('Git pull result:', output);
+                // Check for recent git pull results in system logs
+                try {
+                    const recentGitLogs = execSync('git log -1 --pretty=format:"%h - %s (%cr)"').toString().trim();
+                    logger.info('Latest commit:', recentGitLogs);
+                } catch (logError) {
+                    logger.debug('Could not get latest commit info:', logError.message);
+                }
+                
+                // Perform git pull only if not already done by start.sh
+                if (!process.env.GIT_PULL_ALREADY_PERFORMED) {
+                    const output = execSync('git pull').toString().trim();
+                    
+                    if (output === '' || output.includes('Already up to date')) {
+                        logger.info('Git pull completed: No changes detected (already up to date)');
+                    } else {
+                        logger.info('Git pull result:', output);
+                    }
                 }
             } catch (error) {
                 logger.error('Error performing git pull:', error.message);
