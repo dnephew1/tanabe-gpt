@@ -37,7 +37,7 @@ class NLPProcessor {
 
             // For group chats, check against group name
             if (chat.isGroup) {
-                const isAllowed = whitelist.hasPermission('CHAT_GPT', chat.name);
+                const isAllowed = await whitelist.hasPermission('CHAT_GPT', chat.name);
                 logger.debug('Checking group chat NLP permissions', {
                     groupName: chat.name,
                     isAllowed
@@ -47,8 +47,8 @@ class NLPProcessor {
             
             // For DM chats, check against chat ID or special DM format
             const dmChatId = `dm.${chat.name}`;
-            const isAllowed = whitelist.hasPermission('CHAT_GPT', chat.name) || 
-                             whitelist.hasPermission('CHAT_GPT', dmChatId);
+            const isAllowed = await whitelist.hasPermission('CHAT_GPT', chat.name) || 
+                            await whitelist.hasPermission('CHAT_GPT', dmChatId);
             
             logger.debug('Checking DM chat NLP permissions', {
                 chatId,

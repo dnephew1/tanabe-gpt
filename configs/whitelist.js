@@ -100,13 +100,58 @@ function isGroupConfiguredForSummary(groupName) {
 }
 
 /**
+ * Check if a user is a member of a specific group
+ * @param {string} userId - The user ID (phone number with @c.us)
+ * @param {string} groupName - The name of the group
+ * @returns {Promise<boolean>} - Whether the user is a member of the group
+ */
+async function isUserInGroup(userId, groupName) {
+    try {
+        if (!global.client) {
+            if (logger) {
+                logger.error('WhatsApp client not available for group membership check');
+            }
+            return false;
+        }
+        
+        // Get all chats
+        const chats = await global.client.getChats();
+        
+        // Find the group by name
+        const group = chats.find(chat => chat.isGroup && chat.name === groupName);
+        if (!group) {
+            if (logger) {
+                logger.warn(`Group "${groupName}" not found for membership check`);
+            }
+            return false;
+        }
+        
+        // Check if the user is a participant in the group
+        const isParticipant = group.participants.some(
+            participant => participant.id._serialized === userId
+        );
+        
+        if (logger) {
+            logger.debug(`User ${userId} group membership check for ${groupName}: ${isParticipant}`);
+        }
+        
+        return isParticipant;
+    } catch (error) {
+        if (logger) {
+            logger.error(`Error checking if user ${userId} is in group ${groupName}:`, error);
+        }
+        return false;
+    }
+}
+
+/**
  * Check if a user or group has permission to use a command
  * @param {string} commandName - The name of the command
  * @param {string} chatId - The chat ID (group name or user ID)
  * @param {string} userId - The user ID
- * @returns {boolean} - Whether the user has permission
+ * @returns {boolean|Promise<boolean>} - Whether the user has permission
  */
-function hasPermission(commandName, chatId, userId) {
+async function hasPermission(commandName, chatId, userId) {
     // Check if the user is an admin
     const isAdmin = userId === `${CREDENTIALS.ADMIN_NUMBER}@c.us` || 
                    userId === CREDENTIALS.ADMIN_NUMBER;
@@ -156,13 +201,45 @@ function hasPermission(commandName, chatId, userId) {
         return true;
     }
     
-    // Check if the chat ID is in the whitelist
-    const isAllowed = whitelist.includes(chatId);
-    if (!isAllowed && logger) {
+    // Check if the chat ID is in the whitelist directly
+    if (whitelist.includes(chatId)) {
+        return true;
+    }
+    
+    // Check for direct messages format - if this is a direct message (ends with @c.us), check if the user is from a whitelisted group
+    if (userId && userId.endsWith('@c.us')) {
+        // For DM chats, check if there's a whitelisted DM format that matches
+        const dmFormatEntries = whitelist.filter(entry => entry.startsWith('dm.'));
+        
+        if (dmFormatEntries.length > 0 && logger) {
+            logger.debug(`Checking DM permissions for user ${userId}`, {
+                commandName,
+                dmEntries: dmFormatEntries
+            });
+        }
+        
+        // For each DM format entry, check if the user belongs to that group
+        for (const dmEntry of dmFormatEntries) {
+            // Extract the group name from the DM format (remove 'dm.' prefix)
+            const groupName = dmEntry.substring(3);
+            
+            // Check if user is a member of this group
+            const isMember = await isUserInGroup(userId, groupName);
+            if (isMember) {
+                if (logger) {
+                    logger.debug(`User ${userId} is allowed to use ${commandName} in DM because they are a member of ${groupName}`);
+                }
+                return true;
+            }
+        }
+    }
+    
+    // If we got here, the chat ID was not found in the whitelist
+    if (logger) {
         // Only log at debug level to avoid spamming the admin
         logger.debug(`Chat ${chatId} not in whitelist for command ${commandName}`);
     }
-    return isAllowed;
+    return false;
 }
 
 module.exports = {

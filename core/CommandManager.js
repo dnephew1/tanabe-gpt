@@ -143,6 +143,66 @@ class CommandManager {
             return { command: null, input: '' };
         }
 
+        // First check for # commands (with or without spaces after #)
+        if (trimmedBody.startsWith('#')) {
+            // Clean the command by removing # and any leading whitespace
+            const cleanedCommand = trimmedBody.slice(1).trim();
+            
+            // If there's content after #
+            if (cleanedCommand.length > 0) {
+                // Extract the command part (first word after # and any whitespace)
+                const commandPart = cleanedCommand.split(/\s+/)[0].toLowerCase();
+                
+                logger.debug('Parsing command with prefix #', {
+                    originalMessage: trimmedBody,
+                    cleanedCommand,
+                    commandPart
+                });
+                
+                // Map command prefixes to command names
+                const commandPrefixMap = {
+                    'ayubnews': 'AYUB_NEWS',
+                    'resumo': 'RESUMO',
+                    'sticker': 'STICKER',
+                    'desenho': 'DESENHO',
+                    '?': 'COMMAND_LIST',
+                    'audio': 'AUDIO',
+                    'ferramentaresumo': 'RESUMO_CONFIG',
+                    'twitterdebug': 'TWITTER_DEBUG',
+                    'forcesummary': 'FORCE_SUMMARY',
+                    'clearcache': 'CACHE_CLEAR'
+                };
+                
+                // Check if the command part matches any known command prefix
+                const commandKey = commandPrefixMap[commandPart];
+                if (commandKey && config.COMMANDS[commandKey]) {
+                    // Extract input by removing the command part
+                    const input = cleanedCommand.substring(commandPart.length).trim();
+                    
+                    // Special case for AYUB_NEWS_FUT
+                    if (commandKey === 'AYUB_NEWS' && input.trim().toLowerCase().startsWith('fut')) {
+                        logger.debug(`Found AYUB_NEWS_FUT command`, {
+                            commandKey: 'AYUB_NEWS_FUT',
+                            input: input.slice(3).trim() // Remove 'fut' from input
+                        });
+                        return { 
+                            command: { ...config.COMMANDS['AYUB_NEWS_FUT'], name: 'AYUB_NEWS_FUT' }, 
+                            input: input.slice(3).trim() // Remove 'fut' from input
+                        };
+                    }
+                    
+                    logger.debug(`Found command match for ${commandPart}`, {
+                        commandKey,
+                        input
+                    });
+                    return { 
+                        command: { ...config.COMMANDS[commandKey], name: commandKey }, 
+                        input 
+                    };
+                }
+            }
+        }
+
         // Check each command's prefixes
         for (const [commandName, command] of Object.entries(config.COMMANDS)) {
             if (!command.prefixes || !Array.isArray(command.prefixes)) {
@@ -180,61 +240,19 @@ class CommandManager {
             }
         }
 
-        // If message starts with # and no exact command match found, treat as ChatGPT
+        // If we get here and message starts with #, treat as ChatGPT
         if (trimmedBody.startsWith('#')) {
-            // Extract the command part (everything after # and before the first space)
-            const commandPart = trimmedBody.slice(1).split(/\s+/)[0].toLowerCase();
+            // Clean the command by removing # and any leading whitespace
+            const cleanedCommand = trimmedBody.slice(1).trim();
             
-            // Map command prefixes to command names
-            const commandPrefixMap = {
-                'ayubnews': 'AYUB_NEWS',
-                'resumo': 'RESUMO',
-                'sticker': 'STICKER',
-                'desenho': 'DESENHO',
-                '?': 'COMMAND_LIST',
-                'audio': 'AUDIO',
-                'ferramentaresumo': 'RESUMO_CONFIG',
-                'twitterdebug': 'TWITTER_DEBUG',
-                'forcesummary': 'FORCE_SUMMARY',
-                'clearcache': 'CACHE_CLEAR'
-            };
-            
-            // Check if the command part matches any known command prefix
-            const commandKey = commandPrefixMap[commandPart];
-            if (commandKey && config.COMMANDS[commandKey]) {
-                const input = trimmedBody.slice(commandPart.length + 1).trim(); // +1 for the #
-                
-                // Special case for AYUB_NEWS_FUT
-                if (commandKey === 'AYUB_NEWS' && input.trim().toLowerCase().startsWith('fut')) {
-                    logger.debug(`Found AYUB_NEWS_FUT command`, {
-                        commandKey: 'AYUB_NEWS_FUT',
-                        input: input.slice(3).trim() // Remove 'fut' from input
-                    });
-                    return { 
-                        command: { ...config.COMMANDS['AYUB_NEWS_FUT'], name: 'AYUB_NEWS_FUT' }, 
-                        input: input.slice(3).trim() // Remove 'fut' from input
-                    };
-                }
-                
-                logger.debug(`Found command match for ${commandPart}`, {
-                    commandKey,
-                    input
-                });
-                return { 
-                    command: { ...config.COMMANDS[commandKey], name: commandKey }, 
-                    input 
-                };
-            }
-            
-            // If no specific command match, treat as ChatGPT
             const chatGptCommand = config.COMMANDS.CHAT_GPT;
             if (this.validateCommand('CHAT_GPT', chatGptCommand)) {
                 logger.debug('Treating as ChatGPT command', {
-                    input: trimmedBody.slice(1).trim()
+                    input: cleanedCommand
                 });
                 return { 
                     command: { ...chatGptCommand, name: 'CHAT_GPT' }, 
-                    input: trimmedBody.slice(1).trim() 
+                    input: cleanedCommand
                 };
             }
         }
@@ -301,7 +319,7 @@ class CommandManager {
         }
         
         // Use the whitelist's hasPermission function
-        const isAllowed = whitelist.hasPermission(commandName, chatName, userId);
+        const isAllowed = await whitelist.hasPermission(commandName, chatName, userId);
         
         // Only log a warning if it's not an admin and the command is not allowed
         if (!isAllowed && !isAdmin) {
@@ -375,7 +393,17 @@ class CommandManager {
             // Use NLP input if provided (for tag commands)
             const finalInput = nlpInput || input;
             
-            logger.info(`Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${finalInput}`);
+            // Generate a more descriptive log message
+            let logMessage;
+            if (message.hasMedia) {
+                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with media attachment`;
+            } else if (message.hasQuotedMsg) {
+                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with quoted message`;
+            } else {
+                logMessage = `Executing command: ${command.name} by ${contact.pushname || contact.id._serialized} in ${chat.isGroup ? chat.name : 'DM'} with input: ${finalInput}`;
+            }
+            
+            logger.info(logMessage);
             
             logger.debug('Processing command', {
                 command: command.name,

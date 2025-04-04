@@ -1,4 +1,5 @@
 const fsPromises = require('fs').promises;
+const logger = require('./logger');
 
 // Function to delete a file
 async function deleteFile(filePath) {

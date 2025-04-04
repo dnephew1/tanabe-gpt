@@ -415,9 +415,18 @@ function setupListeners(client) {
             });
             
             try {
+                // Only delete messages reacted with praying hands emoji (🙏)
+                const PRAYER_EMOJI = '🙏';
+                
+                // If the reaction is not the praying hands emoji, ignore it
+                if (reaction.reaction !== PRAYER_EMOJI) {
+                    logger.debug(`Ignoring reaction with emoji ${reaction.reaction} - only ${PRAYER_EMOJI} triggers deletion`);
+                    return;
+                }
+                
                 // If the reacted message was from the bot, delete it
                 if (reaction.msgId.fromMe) {
-                    logger.debug('Message was from bot, getting chat');
+                    logger.debug('Message was from bot and has prayer emoji reaction, getting chat');
                     
                     // Get chat using the message's remote (chat) ID instead of sender ID
                     const chat = await client.getChatById(reaction.msgId.remote);
@@ -445,7 +454,7 @@ function setupListeners(client) {
                     if (message) {
                         logger.debug('Attempting to delete message');
                         await message.delete(true);
-                        logger.info('Successfully deleted message after reaction');
+                        logger.info(`Successfully deleted message after reaction`);
                     } else {
                         logger.warn('Could not find message to delete', {
                             searchedId: reaction.msgId._serialized,

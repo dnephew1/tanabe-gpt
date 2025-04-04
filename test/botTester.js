@@ -430,9 +430,9 @@ async function sendMessageAndWaitForResponse(client, group, message, options = {
             // Wait a moment before reacting
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // React with thumbs up
-            await response.react('👍');
-            console.log('Added thumbs up reaction to bot message');
+            // React with praying hands emoji (which is the only emoji that triggers deletion)
+            await response.react('🙏');
+            console.log('Added praying hands (🙏) reaction to bot message');
             
             // Wait for message to be deleted (with a reasonable timeout)
             const deletionTimeout = 10000; // 10 seconds
@@ -450,7 +450,7 @@ async function sendMessageAndWaitForResponse(client, group, message, options = {
                         
                         if (!messageExists) {
                             clearInterval(checkInterval);
-                            console.log('Bot message was deleted after reaction');
+                            console.log('Bot message was deleted after praying hands reaction');
                             resolve({ wasDeleted: true });
                         } else if (Date.now() - startTime > deletionTimeout) {
                             // Timeout reached

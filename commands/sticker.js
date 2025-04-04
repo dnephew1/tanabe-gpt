@@ -11,6 +11,7 @@ async function handleSticker(message, command, input = []) {
     // Case 1: Message has media - convert to sticker
     if (message.hasMedia) {
         logger.debug('Converting media to sticker');
+        logger.debug(`Processing sticker creation from user-supplied image`);
         const attachmentData = await message.downloadMedia();
         const response = await message.reply(attachmentData, message.from, { sendMediaAsSticker: true });
         await handleAutoDelete(response, command);
@@ -20,13 +21,14 @@ async function handleSticker(message, command, input = []) {
     // Case 2: Message quotes another message with media
     if (message.hasQuotedMsg) {
         logger.debug('Processing quoted message for sticker');
+        logger.debug(`Processing sticker creation from quoted image`);
         const quotedMsg = await message.getQuotedMessage();
         if (quotedMsg.hasMedia) {
             const attachmentData = await quotedMsg.downloadMedia();
             const imagePath = path.join(__dirname, `quoted_image_${Date.now()}.jpg`);
             
             try {
-                await fsPromises.writeFile(imagePath, attachmentData.data, 'base64');
+                await fs.writeFile(imagePath, attachmentData.data, 'base64');
                 const imageAsSticker = MessageMedia.fromFilePath(imagePath);
                 const response = await message.reply(imageAsSticker, message.from, { sendMediaAsSticker: true });
                 await handleAutoDelete(response, command);
@@ -49,6 +51,7 @@ async function handleSticker(message, command, input = []) {
     const query = Array.isArray(input) ? input.slice(1).join(' ') : message.body.split(' ').slice(1).join(' ');
     if (query && /\S/.test(query)) {
         logger.debug(`Searching for image with query: ${query}`);
+        logger.debug(`Processing sticker creation from search query: "${query}"`);
         try {
             const imageUrl = await searchGoogleForImage(query);
             if (!imageUrl) {
