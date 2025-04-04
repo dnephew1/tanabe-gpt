@@ -378,10 +378,15 @@ async function main() {
             logger.info('Performing git pull...');
             try {
                 const { execSync } = require('child_process');
-                const output = execSync('git pull').toString();
-                logger.info('Git pull result:', output);
+                const output = execSync('git pull').toString().trim();
+                
+                if (output === '') {
+                    logger.info('Git pull completed: No changes detected (already up to date)');
+                } else {
+                    logger.info('Git pull result:', output);
+                }
             } catch (error) {
-                logger.error('Error performing git pull:', error);
+                logger.error('Error performing git pull:', error.message);
                 // Continue even if git pull fails
             }
         }
