@@ -376,20 +376,38 @@ async function main() {
         // Perform git pull if running in production
         if (process.env.NODE_ENV === 'production') {
             logger.info('Performing git pull...');
-            try {
-                // If we're running from start.sh, the git pull has already been performed
-                const { execSync } = require('child_process');
-                
-                // Check for recent git pull results in system logs
-                try {
-                    const recentGitLogs = execSync('git log -1 --pretty=format:"%h - %s (%cr)"').toString().trim();
-                    logger.info('Latest commit:', recentGitLogs);
-                } catch (logError) {
-                    logger.debug('Could not get latest commit info:', logError.message);
+            
+            // Handle git information differently if run through start.sh
+            if (process.env.GIT_PULL_ALREADY_PERFORMED) {
+                if (process.env.LATEST_COMMIT) {
+                    logger.info('Latest commit:', process.env.LATEST_COMMIT);
                 }
                 
-                // Perform git pull only if not already done by start.sh
-                if (!process.env.GIT_PULL_ALREADY_PERFORMED) {
+                // Log the git pull output from start.sh
+                if (process.env.GIT_PULL_OUTPUT) {
+                    if (process.env.GIT_PULL_OUTPUT.trim() === '' || 
+                        process.env.GIT_PULL_OUTPUT.includes('Already up to date')) {
+                        logger.info('Git pull completed: No changes detected (already up to date)');
+                    } else {
+                        logger.info('Git pull result:', process.env.GIT_PULL_OUTPUT);
+                    }
+                } else {
+                    logger.info('Git pull was performed by start.sh (no detailed output available)');
+                }
+            } else {
+                // If not run through start.sh, perform git pull directly
+                try {
+                    const { execSync } = require('child_process');
+                    
+                    // Check for recent git pull results in system logs
+                    try {
+                        const recentGitLogs = execSync('git log -1 --pretty=format:"%h - %s (%cr)"').toString().trim();
+                        logger.info('Latest commit:', recentGitLogs);
+                    } catch (logError) {
+                        logger.debug('Could not get latest commit info:', logError.message);
+                    }
+                    
+                    // Perform git pull
                     const output = execSync('git pull').toString().trim();
                     
                     if (output === '' || output.includes('Already up to date')) {
@@ -397,10 +415,10 @@ async function main() {
                     } else {
                         logger.info('Git pull result:', output);
                     }
+                } catch (error) {
+                    logger.error('Error performing git pull:', error.message);
+                    // Continue even if git pull fails
                 }
-            } catch (error) {
-                logger.error('Error performing git pull:', error.message);
-                // Continue even if git pull fails
             }
         }
 
