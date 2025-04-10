@@ -569,7 +569,7 @@ async function restartMonitors(restartTwitter = true, restartRss = true) {
     if (restartRss) {
         if (config.NEWS_MONITOR.RSS_ENABLED) {
             if (config.NEWS_MONITOR.FEEDS && config.NEWS_MONITOR.FEEDS.length > 0) {
-                // Set up RSS monitoring interval
+                // Set up RSS monitoring interval (hourly batch processing)
                 rssIntervalId = setInterval(async () => {
                     try {
                         for (const feed of config.NEWS_MONITOR.FEEDS) {
@@ -600,11 +600,85 @@ async function restartMonitors(restartTwitter = true, restartRss = true) {
                                     continue;
                                 }
                                 
-                                logger.info(`Processing ${unprocessedArticles.length} new articles from the last hour for feed: ${feed.name}`);
+                                // Only log at debug level instead of info level
+                                logger.debug(`Processing ${unprocessedArticles.length} new articles from the last hour for feed: ${feed.name}`);
                                 
-                                // Process articles using batch evaluation
-                                // ... (existing RSS processing code which is quite long)
-                                // This part is unchanged from the original implementation
+                                // Extract all titles for batch evaluation
+                                const titles = unprocessedArticles.map(article => article.title);
+                                
+                                // Batch evaluate titles
+                                const titleRelevanceResults = await batchEvaluateArticleTitles(titles);
+                                
+                                // Find articles with relevant titles
+                                const relevantTitleIndices = titleRelevanceResults
+                                    .map((isRelevant, index) => isRelevant ? index : -1)
+                                    .filter(index => index !== -1);
+                                
+                                if (relevantTitleIndices.length === 0) {
+                                    logger.debug(`No relevant article titles found for feed: ${feed.name}`);
+                                    
+                                    // Mark all articles as processed so we don't check them again
+                                    unprocessedArticles.forEach(article => {
+                                        const articleId = article.guid || article.id || article.link;
+                                        cacheArticle(feed.id, articleId);
+                                    });
+                                    
+                                    continue;
+                                }
+                                
+                                // Prepare articles with relevant titles for full content evaluation
+                                const articlesForFullEvaluation = relevantTitleIndices
+                                    .map(index => ({
+                                        article: unprocessedArticles[index],
+                                        title: unprocessedArticles[index].title,
+                                        content: extractArticleContent(unprocessedArticles[index])
+                                    }));
+                                
+                                // Batch evaluate full content
+                                const selectedArticles = await batchEvaluateFullContent(articlesForFullEvaluation);
+                                
+                                // Mark all processed articles as cached
+                                unprocessedArticles.forEach(article => {
+                                    const articleId = article.guid || article.id || article.link;
+                                    cacheArticle(feed.id, articleId);
+                                });
+                                
+                                // If no articles were selected as relevant, continue to next feed
+                                if (selectedArticles.length === 0) {
+                                    logger.debug(`No articles were selected as relevant for feed: ${feed.name}`);
+                                    continue;
+                                }
+                                
+                                // Process selected articles (maximum of 2)
+                                let articlesSent = 0;
+                                for (const selection of selectedArticles.slice(0, 2)) {
+                                    const articleData = articlesForFullEvaluation[selection.index];
+                                    const article = articleData.article;
+                                    const articleContent = articleData.content;
+                                    
+                                    // Translate title if needed
+                                    let articleTitle = article.title;
+                                    if (feed.language !== 'pt') {
+                                        articleTitle = await translateToPortuguese(article.title, feed.language);
+                                    }
+                                    
+                                    // Generate summary
+                                    const summary = await generateSummary(article.title, articleContent);
+                                    
+                                    // Format message
+                                    const message = `*Breaking News* 🗞️\n\n*${articleTitle}*\n\n${summary}\n\nFonte: ${feed.name} | [Read More](${article.link})`;
+                                    
+                                    // Send to group
+                                    await targetGroup.sendMessage(message);
+                                    articlesSent++;
+                                    
+                                    // Now log that we sent an article - only when actually sent
+                                    logger.info(`Sent article from ${feed.name}: "${article.title.substring(0, 80)}${article.title.length > 80 ? '...' : ''}"`);
+                                }
+                                
+                                if (articlesSent > 0) {
+                                    logger.info(`Sent ${articlesSent} relevant articles from feed: ${feed.name}`);
+                                }
                                 
                             } catch (feedError) {
                                 logger.error(`Error processing feed ${feed.name}:`, feedError);
@@ -754,11 +828,85 @@ async function initializeNewsMonitor() {
                                     continue;
                                 }
                                 
-                                logger.info(`Processing ${unprocessedArticles.length} new articles from the last hour for feed: ${feed.name}`);
+                                // Only log at debug level instead of info level
+                                logger.debug(`Processing ${unprocessedArticles.length} new articles from the last hour for feed: ${feed.name}`);
                                 
-                                // Process articles using batch evaluation
-                                // ... (existing RSS processing code which is quite long)
-                                // This part is unchanged from the original implementation
+                                // Extract all titles for batch evaluation
+                                const titles = unprocessedArticles.map(article => article.title);
+                                
+                                // Batch evaluate titles
+                                const titleRelevanceResults = await batchEvaluateArticleTitles(titles);
+                                
+                                // Find articles with relevant titles
+                                const relevantTitleIndices = titleRelevanceResults
+                                    .map((isRelevant, index) => isRelevant ? index : -1)
+                                    .filter(index => index !== -1);
+                                
+                                if (relevantTitleIndices.length === 0) {
+                                    logger.debug(`No relevant article titles found for feed: ${feed.name}`);
+                                    
+                                    // Mark all articles as processed so we don't check them again
+                                    unprocessedArticles.forEach(article => {
+                                        const articleId = article.guid || article.id || article.link;
+                                        cacheArticle(feed.id, articleId);
+                                    });
+                                    
+                                    continue;
+                                }
+                                
+                                // Prepare articles with relevant titles for full content evaluation
+                                const articlesForFullEvaluation = relevantTitleIndices
+                                    .map(index => ({
+                                        article: unprocessedArticles[index],
+                                        title: unprocessedArticles[index].title,
+                                        content: extractArticleContent(unprocessedArticles[index])
+                                    }));
+                                
+                                // Batch evaluate full content
+                                const selectedArticles = await batchEvaluateFullContent(articlesForFullEvaluation);
+                                
+                                // Mark all processed articles as cached
+                                unprocessedArticles.forEach(article => {
+                                    const articleId = article.guid || article.id || article.link;
+                                    cacheArticle(feed.id, articleId);
+                                });
+                                
+                                // If no articles were selected as relevant, continue to next feed
+                                if (selectedArticles.length === 0) {
+                                    logger.debug(`No articles were selected as relevant for feed: ${feed.name}`);
+                                    continue;
+                                }
+                                
+                                // Process selected articles (maximum of 2)
+                                let articlesSent = 0;
+                                for (const selection of selectedArticles.slice(0, 2)) {
+                                    const articleData = articlesForFullEvaluation[selection.index];
+                                    const article = articleData.article;
+                                    const articleContent = articleData.content;
+                                    
+                                    // Translate title if needed
+                                    let articleTitle = article.title;
+                                    if (feed.language !== 'pt') {
+                                        articleTitle = await translateToPortuguese(article.title, feed.language);
+                                    }
+                                    
+                                    // Generate summary
+                                    const summary = await generateSummary(article.title, articleContent);
+                                    
+                                    // Format message
+                                    const message = `*Breaking News* 🗞️\n\n*${articleTitle}*\n\n${summary}\n\nFonte: ${feed.name} | [Read More](${article.link})`;
+                                    
+                                    // Send to group
+                                    await targetGroup.sendMessage(message);
+                                    articlesSent++;
+                                    
+                                    // Now log that we sent an article - only when actually sent
+                                    logger.info(`Sent article from ${feed.name}: "${article.title.substring(0, 80)}${article.title.length > 80 ? '...' : ''}"`);
+                                }
+                                
+                                if (articlesSent > 0) {
+                                    logger.info(`Sent ${articlesSent} relevant articles from feed: ${feed.name}`);
+                                }
                                 
                             } catch (feedError) {
                                 logger.error(`Error processing feed ${feed.name}:`, feedError);
@@ -1068,12 +1216,141 @@ Twitter Monitor:
 Commands:
 - !rssdebug on/off - Enable/disable RSS monitoring
 - !twitterdebug on/off - Enable/disable Twitter monitoring
-- !newsstatus - Show this status information`;
+- !newsstatus - Show this status information
+- !checkrelevance - Check why articles may not be passing relevance filters`;
 
         await message.reply(statusInfo);
     } catch (error) {
         logger.error('Error in news monitor status:', error);
         await message.reply('Error getting news monitor status: ' + error.message);
+    }
+}
+
+/**
+ * Debug function to check why articles aren't being considered relevant
+ * This helps diagnose issues with the relevance filtering process
+ */
+async function checkRelevanceStatusForFeed(message) {
+    try {
+        if (!config.NEWS_MONITOR.RSS_ENABLED) {
+            await message.reply('RSS monitor is disabled in configuration. Enable it with !rssdebug on');
+            return;
+        }
+        
+        if (!config.NEWS_MONITOR.FEEDS || config.NEWS_MONITOR.FEEDS.length === 0) {
+            await message.reply('No RSS feeds configured');
+            return;
+        }
+
+        // Just use the first feed for testing
+        const feed = config.NEWS_MONITOR.FEEDS[0];
+        await message.reply(`Checking relevance status for feed: ${feed.name}...`);
+        
+        // Fetch articles from feed
+        const allArticles = await fetchRssFeedItems(feed);
+        if (allArticles.length === 0) {
+            await message.reply(`No articles found in feed: ${feed.name}`);
+            return;
+        }
+        
+        // Sort articles by publish date (newest first)
+        allArticles.sort((a, b) => new Date(b.pubDate || b.isoDate) - new Date(a.pubDate || a.isoDate));
+        
+        // Take the 10 most recent articles for analysis
+        const recentArticles = allArticles.slice(0, 10);
+        
+        // Check which articles are already in cache
+        const cacheStatus = recentArticles.map(article => {
+            const articleId = article.guid || article.id || article.link;
+            return {
+                title: article.title,
+                inCache: isArticleCached(feed.id, articleId)
+            };
+        });
+        
+        const cachedCount = cacheStatus.filter(a => a.inCache).length;
+        
+        await message.reply(`Found ${recentArticles.length} recent articles, ${cachedCount} are already in cache and would be skipped.`);
+        
+        // Test title evaluation on non-cached articles
+        const uncachedArticles = recentArticles.filter((_, index) => !cacheStatus[index].inCache);
+        
+        if (uncachedArticles.length === 0) {
+            await message.reply('All recent articles are already cached. This means they were processed in previous runs.');
+            return;
+        }
+        
+        // Evaluate article titles for relevance
+        const titles = uncachedArticles.map(article => article.title);
+        await message.reply(`Evaluating ${titles.length} article titles for relevance...`);
+        
+        // Batch evaluate titles
+        const titleRelevanceResults = await batchEvaluateArticleTitles(titles);
+        
+        // Find articles with relevant titles
+        const relevantTitleIndices = titleRelevanceResults
+            .map((isRelevant, index) => isRelevant ? index : -1)
+            .filter(index => index !== -1);
+        
+        logger.info(`Title relevance check: ${relevantTitleIndices.length} of ${titles.length} passed the first filter`);
+        
+        if (relevantTitleIndices.length === 0) {
+            await message.reply(`ISSUE FOUND: None of the article titles were deemed relevant. This means all articles are being filtered out at the title evaluation stage.`);
+            
+            // Show sample of titles that were rejected
+            const titleSamples = titles.slice(0, 5).map((title, i) => `${i+1}. "${title}"`).join('\n');
+            await message.reply(`Sample titles that were rejected:\n${titleSamples}\n\nYou may need to adjust the title evaluation prompt to be less strict.`);
+            return;
+        }
+        
+        await message.reply(`${relevantTitleIndices.length} of ${titles.length} article titles passed the first relevance filter.`);
+        
+        // Prepare relevant articles for full content evaluation
+        const articlesForFullEvaluation = relevantTitleIndices
+            .map(index => ({
+                article: uncachedArticles[index],
+                title: uncachedArticles[index].title,
+                content: extractArticleContent(uncachedArticles[index])
+            }));
+        
+        // Evaluate full content
+        await message.reply(`Evaluating full content for ${articlesForFullEvaluation.length} articles with relevant titles...`);
+        
+        const selectedArticles = await batchEvaluateFullContent(articlesForFullEvaluation);
+        
+        logger.info(`Full content relevance check: ${selectedArticles.length} of ${articlesForFullEvaluation.length} passed the second filter`);
+        
+        if (selectedArticles.length === 0) {
+            await message.reply(`ISSUE FOUND: None of the articles with relevant titles were deemed relevant after full content evaluation. This means articles are being filtered out at the content evaluation stage.`);
+            
+            // Show sample of titles that were rejected at content stage
+            const contentSamples = articlesForFullEvaluation.slice(0, 3).map((data, i) => 
+                `${i+1}. "${data.title}" (Content length: ${data.content.length} chars)`
+            ).join('\n');
+            
+            await message.reply(`Sample articles that were rejected at content stage:\n${contentSamples}\n\nYou may need to adjust the full content evaluation prompt to be less strict.`);
+            return;
+        }
+        
+        // We found relevant articles!
+        await message.reply(`${selectedArticles.length} of ${articlesForFullEvaluation.length} articles passed both relevance filters and would be sent to the group.`);
+        
+        // Display info about the most relevant article
+        const mostRelevantArticle = articlesForFullEvaluation[selectedArticles[0].index];
+        const justification = selectedArticles[0].justification;
+        
+        await message.reply(`Most relevant article:\nTitle: "${mostRelevantArticle.title}"\nJustification: ${justification}\n\nThis article would be sent to the group.`);
+        
+        // Check the target group
+        if (!targetGroup) {
+            await message.reply(`ISSUE FOUND: The target group "${config.NEWS_MONITOR.TARGET_GROUP}" is not found or not accessible. Messages cannot be sent.`);
+        } else {
+            await message.reply(`Target group "${config.NEWS_MONITOR.TARGET_GROUP}" is properly configured.`);
+        }
+        
+    } catch (error) {
+        logger.error('Error checking relevance status:', error);
+        await message.reply('Error checking relevance status: ' + error.message);
     }
 }
 
@@ -1084,6 +1361,7 @@ module.exports = {
     newsMonitorStatus,
     getCurrentTwitterApiKey,
     restartMonitors,
+    checkRelevanceStatusForFeed,
     // Export for testing
     evaluateContent,
     generateSummary,

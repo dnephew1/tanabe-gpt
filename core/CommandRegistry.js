@@ -3,7 +3,7 @@ const { handleResumo } = require('../commands/resumo');
 const { handleAyub, handleAyubNewsFut } = require('../commands/ayub');
 const { handleSticker } = require('../commands/sticker');
 const handleDesenho = require('../commands/desenho');
-const { handleCacheClear, handleTwitterDebug, handleRssDebug, handleForceSummary, handleConfig, handleNewsStatus } = require('../commands/admin');
+const { handleCacheClear, handleTwitterDebug, handleRssDebug, handleForceSummary, handleConfig, handleNewsStatus, handleCheckRelevance } = require('../commands/admin');
 const { handleChat } = require('../commands/chat');
 const { handleTag } = require('../commands/tag');
 const { handleAudio } = require('../commands/audio');
@@ -28,6 +28,7 @@ function registerCommands() {
     commandManager.registerHandler('NEWS_STATUS', handleNewsStatus);
     commandManager.registerHandler('FORCE_SUMMARY', handleForceSummary);
     commandManager.registerHandler('CONFIG', handleConfig);
+    commandManager.registerHandler('CHECK_RELEVANCE', handleCheckRelevance);
     commandManager.registerHandler('AUDIO', handleAudio);
     commandManager.registerHandler('RESUMO_CONFIG', startWizard);
     commandManager.registerHandler('TAG', handleTag);

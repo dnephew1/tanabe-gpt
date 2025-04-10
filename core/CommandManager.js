@@ -19,7 +19,20 @@ class CommandManager {
     async parseCommand(messageBody, mentions = []) {
         if (!messageBody) return { command: null, input: '' };
 
-        const trimmedBody = messageBody.trim();
+        // First, normalize the message: trim it and handle # followed by spaces
+        let trimmedBody = messageBody.trim();
+        
+        // Handle case where message starts with # followed by spaces
+        if (trimmedBody.match(/^#\s+/)) {
+            // Replace "# command" with "#command"
+            const normalizedBody = trimmedBody.replace(/^#\s+/, '#');
+            logger.debug('Normalized message with spaces after #', {
+                original: trimmedBody,
+                normalized: normalizedBody
+            });
+            trimmedBody = normalizedBody;
+        }
+        
         logger.debug('Parsing command from message', { 
             messageBody: trimmedBody,
             hasMentions: mentions.length > 0 
@@ -46,8 +59,9 @@ class CommandManager {
                     });
                     
                     if (nlpResult && nlpResult.startsWith('#')) {
-                        const processedCommand = nlpResult.slice(1).trim();
-                        const [commandName, ...inputParts] = processedCommand.split(' ');
+                        // Handle whitespace after # prefix
+                        const cleanedResult = nlpResult.replace(/^#\s*/, '').trim();
+                        const [commandName, ...inputParts] = cleanedResult.split(/\s+/);
                         
                         // Map command prefixes to command names
                         const commandPrefixMap = {
@@ -158,6 +172,19 @@ class CommandManager {
             });
             
             for (const prefix of command.prefixes) {
+                // Add detailed logging for # commands
+                if (prefix.startsWith('#') && trimmedBody.startsWith('#')) {
+                    logger.debug('Checking # command match details', {
+                        commandName,
+                        prefix,
+                        trimmedBody,
+                        prefixLower: prefix.toLowerCase(),
+                        messageBodyLower: trimmedBody.toLowerCase(),
+                        startsWithPrefix: trimmedBody.toLowerCase().startsWith(prefix.toLowerCase()),
+                        startsWithPrefixSpace: trimmedBody.toLowerCase().startsWith(prefix.toLowerCase() + ' ')
+                    });
+                }
+                
                 // Check for exact match first (case insensitive)
                 if (trimmedBody.toLowerCase() === prefix.toLowerCase()) {
                     logger.debug('Found exact command match', {
@@ -184,7 +211,7 @@ class CommandManager {
         // If we get here and message starts with #, treat as ChatGPT
         if (trimmedBody.startsWith('#')) {
             // Clean the command by removing # and any leading whitespace
-            const cleanedCommand = trimmedBody.slice(1).trim();
+            const cleanedCommand = trimmedBody.replace(/^#\s*/, '').trim();
             
             // If there's content after #
             if (cleanedCommand.length > 0) {
@@ -196,6 +223,37 @@ class CommandManager {
                     cleanedCommand,
                     commandPart
                 });
+                
+                // First check if this is a known command prefix
+                // Try to match against all known command prefixes
+                let foundSpecificCommand = false;
+                for (const [cmdName, cmd] of Object.entries(config.COMMANDS)) {
+                    if (cmd.prefixes && Array.isArray(cmd.prefixes)) {
+                        // Check if any of the prefixes match our command part
+                        for (const cmdPrefix of cmd.prefixes) {
+                            if (cmdPrefix.startsWith('#') && 
+                                cmdPrefix.substring(1).toLowerCase() === commandPart.toLowerCase()) {
+                                // This is a known command, but we already checked it earlier and it didn't match
+                                // So this is likely a malformed command, log it
+                                logger.debug('Detected malformed command', {
+                                    commandPart,
+                                    matchingPrefix: cmdPrefix,
+                                    command: cmdName
+                                });
+                                foundSpecificCommand = true;
+                                break;
+                            }
+                        }
+                        if (foundSpecificCommand) break;
+                    }
+                }
+                
+                // If this matches a known command prefix but didn't match our earlier checks,
+                // treat it as that command with empty input rather than defaulting to ChatGPT
+                if (foundSpecificCommand) {
+                    logger.debug('Treating as malformed specific command instead of ChatGPT');
+                    // Continue to check command prefix map below
+                }
                 
                 // Map command prefixes to command names
                 const commandPrefixMap = {

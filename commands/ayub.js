@@ -159,11 +159,6 @@ async function handleAyubNewsSearch(message, command, searchTerm) {
     }
 }
 
-// Handle AYUB_NEWS command
-async function handleAyubNews(msg, input) {
-    // ... existing code ...
-}
-
 // Handle AYUB_NEWS_FUT command for football news
 async function handleAyubNewsFut(msg) {
     try {
@@ -234,6 +229,5 @@ module.exports = {
     handleAyubLinkSummary,
     handleAyubNewsSticker,
     handleAyubNewsSearch,
-    handleAyubNews,
     handleAyubNewsFut
 }; 

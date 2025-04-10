@@ -90,7 +90,18 @@ class NLPProcessor {
 
     async isAllowedChat(chat) {
         try {
-            const chatId = chat.id._serialized;
+            // Handle cases where chat.id might be undefined or have a different structure
+            let chatId;
+            if (chat.id && chat.id._serialized) {
+                chatId = chat.id._serialized;
+            } else if (chat.id && typeof chat.id === 'string') {
+                chatId = chat.id;
+            } else if (chat._serialized) {
+                chatId = chat._serialized;
+            } else {
+                logger.error('Invalid chat object structure:', { chat });
+                return false;
+            }
             
             // Format location string consistently
             const locationStr = chat.isGroup ? `in ${chat.name}` : "in DM";
@@ -359,8 +370,10 @@ class NLPProcessor {
             
             // Parse the command
             if (processedCommand.startsWith('#')) {
-                // Extract command name and input
-                const commandParts = processedCommand.slice(1).trim().split(/\s+/);
+                // Extract command name and input - modified to handle whitespace after #
+                // First remove the # and any whitespace after it
+                const cleanedCommand = processedCommand.replace(/^#\s*/, '').trim();
+                const commandParts = cleanedCommand.split(/\s+/);
                 let commandName = commandParts[0].toUpperCase();
                 const commandInput = commandParts.slice(1).join(' ');
                 

@@ -4,7 +4,7 @@ const { performCacheClearing } = require('./cacheManagement');
 const logger = require('../utils/logger');
 const { getNextSummaryInfo, scheduleNextSummary } = require('../utils/periodicSummaryUtils');
 const { runPeriodicSummary } = require('./periodicSummary');
-const { debugTwitterFunctionality, debugRssFunctionality, newsMonitorStatus, getCurrentTwitterApiKey } = require('./newsMonitor');
+const { debugTwitterFunctionality, debugRssFunctionality, newsMonitorStatus, getCurrentTwitterApiKey, checkRelevanceStatusForFeed } = require('./newsMonitor');
 const axios = require('axios');
 
 // Runtime configuration that can be modified during execution
@@ -277,6 +277,31 @@ async function handleNewsStatus(message) {
     }
 }
 
+/**
+ * Handle the check relevance command to diagnose news filtering issues
+ */
+async function handleCheckRelevance(message) {
+    logger.debug('Check relevance command activated');
+    
+    // Check if message is from admin chat
+    if (!await isAdminChat(message)) {
+        logger.debug('Check relevance command rejected: not admin chat');
+        return;
+    }
+    
+    try {
+        const chat = await message.getChat();
+        await chat.sendStateTyping();
+        
+        // Call the relevance check function
+        await checkRelevanceStatusForFeed(message);
+        
+    } catch (error) {
+        logger.error('Error in check relevance command', error);
+        await message.reply(`Error checking article relevance: ${error.message}`);
+    }
+}
+
 module.exports = {
     handleCacheClear,
     handleTwitterDebug,
@@ -284,5 +309,6 @@ module.exports = {
     handleRssDebug,
     handleConfig,
     handleNewsStatus,
+    handleCheckRelevance,
     runtimeConfig
 }; 

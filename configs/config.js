@@ -30,7 +30,7 @@ const SYSTEM = {
         SUMMARY: true,
         STARTUP: true,
         SHUTDOWN: true,
-        PROMPT: false,
+        PROMPT: true,
         COMMAND: true
     },
     NOTIFICATION_LEVELS: {

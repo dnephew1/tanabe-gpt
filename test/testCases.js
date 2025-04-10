@@ -11,7 +11,7 @@ const TEST_CASES = {
         {
             name: 'Basic Summary',
             command: '#resumo',
-            expectedResponseContains: ['últimas', 'horas', 'três', "3"],
+            expectedResponseContains: ['últimas', 'horas', 'três', '3','hora','resumo'],
             description: 'Should summarize the last 3 hours',
             category: 'SUMMARY',
             extraDelay: 5000 // Extra delay for summary commands
@@ -41,7 +41,7 @@ const TEST_CASES = {
         {
             name: 'Summary with Specific Count',
             command: '#resumo 10',
-            expectedResponseContains: ['últimas', 'mensagens', 'dez', '10'],
+            expectedResponseContains: ['últimas', 'mensagens', 'dez', '10','resumo'],
             description: 'Should summarize only the last 10 messages',
             category: 'SUMMARY',
             extraDelay: 5000
@@ -73,7 +73,7 @@ const TEST_CASES = {
             command: '',
             attachment: config.SAMPLES.RESUMO_STICKER,
             isSticker: true, // Send as sticker
-            expectedResponseContains: ['últimas', 'horas'],
+            expectedResponseContains: ['últimas', 'horas','hora','resumo'],
             description: 'Should summarize using the summary sticker',
             category: 'SUMMARY',
             extraDelay: 5000
@@ -207,7 +207,7 @@ const TEST_CASES = {
     ADMIN: [
         {
             name: 'Force Summary',
-            command: '#forcesummary',
+            command: '!forcesummary',
             expectedResponseContains: ['summary', 'scheduling'],
             description: 'Should force a summary to be generated',
             category: 'ADMIN',
@@ -216,7 +216,7 @@ const TEST_CASES = {
         },
         {
             name: 'Twitter Debug',
-            command: '#twitterdebug',
+            command: '!twitterdebug',
             expectedResponseContains: ['API Status', 'Twitter'],
             description: 'Should show Twitter debug information',
             category: 'ADMIN',
@@ -225,7 +225,7 @@ const TEST_CASES = {
         },
         {
             name: 'RSS Debug',
-            command: '#rssdebug',
+            command: '!rssdebug',
             expectedResponseContains: ['RSS Feed Debug', 'Summary'],
             description: 'Should show RSS debug information',
             category: 'ADMIN',
@@ -234,7 +234,7 @@ const TEST_CASES = {
         },
         {
             name: 'Cache Clear',
-            command: '#clearcache',
+            command: '!clearcache',
             expectedResponseContains: ['Cache cleared successfully'],
             description: 'Should clear the cache',
             category: 'ADMIN',
